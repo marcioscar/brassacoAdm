@@ -1,0 +1,46 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "mongodb"
+    url      = env("DATABASE_URL")
+}
+
+// Exemplo de um modelo de usuário para o MongoDB
+
+model despesas {
+    id          String    @id @default(auto()) @map("_id") @db.ObjectId
+    conta       String?
+    valor       Float?
+    descricao   String?
+    fornecedor  String?
+    tipo        String?
+    data        DateTime?
+    comprovante String?
+    boleto      String?
+    pago        Boolean?  @default(false)
+    loja        String?
+}
+
+model fornecedores {
+    id   String  @id @default(auto()) @map("_id") @db.ObjectId
+    nome String?
+}
+
+model receitas {
+    id        String    @id @default(auto()) @map("_id") @db.ObjectId
+    conta     String?
+    valor     Float?
+    descricao String?
+    loja      String?
+    data      DateTime? @default(now())
+}
+
+model compras {
+    id         String    @id @default(auto()) @map("_id") @db.ObjectId
+    valor      Float?
+    fornecedor String?
+    nf         Json?
+    data       DateTime? @default(now())
+}
