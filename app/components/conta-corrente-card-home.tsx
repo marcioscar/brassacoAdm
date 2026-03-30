@@ -25,6 +25,23 @@ type ContaLoader = {
 	extratos: ExtratoLinha[] | null;
 } | null;
 
+const DIAS_EXTRATO_VISIVEL = 60;
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
+function extratoDentroDosUltimosDias(
+	linha: ExtratoLinha,
+	dias: number,
+	agora: number,
+) {
+	const t = new Date(linha.data).getTime();
+	return t >= agora - dias * MS_POR_DIA;
+}
+
+function filtrarExtratosUltimosDias(extratos: ExtratoLinha[], dias: number) {
+	const agora = Date.now();
+	return extratos.filter((e) => extratoDentroDosUltimosDias(e, dias, agora));
+}
+
 function ordenarExtratosDesc(extratos: ExtratoLinha[]) {
 	return [...extratos].sort(
 		(a, b) => new Date(b.data).getTime() - new Date(a.data).getTime(),
@@ -56,10 +73,21 @@ export function ContaCorrenteCardHome({
 	nome: string;
 	conta: ContaLoader;
 }) {
-	const extratosOrdenados = useMemo(
-		() => (conta?.extratos?.length ? ordenarExtratosDesc(conta.extratos) : []),
-		[conta?.extratos],
-	);
+	const { extratosOrdenados, semLancamentosNoPeriodo } = useMemo(() => {
+		const bruto = conta?.extratos;
+		if (!bruto?.length) {
+			return { extratosOrdenados: [], semLancamentosNoPeriodo: false };
+		}
+		const filtrados = filtrarExtratosUltimosDias(
+			bruto,
+			DIAS_EXTRATO_VISIVEL,
+		);
+		const ordenados = ordenarExtratosDesc(filtrados);
+		return {
+			extratosOrdenados: ordenados,
+			semLancamentosNoPeriodo: ordenados.length === 0,
+		};
+	}, [conta?.extratos]);
 
 	return (
 		<Card className='@container/card'>
@@ -89,7 +117,9 @@ export function ContaCorrenteCardHome({
 							</p>
 						) : extratosOrdenados.length === 0 ? (
 							<p className='text-muted-foreground text-sm'>
-								Nenhum lançamento no extrato.
+								{semLancamentosNoPeriodo
+									? `Nenhum lançamento nos últimos ${DIAS_EXTRATO_VISIVEL} dias.`
+									: "Nenhum lançamento no extrato."}
 							</p>
 						) : (
 							<ul className='max-h-60 space-y-2 overflow-y-auto pr-1 text-sm'>
