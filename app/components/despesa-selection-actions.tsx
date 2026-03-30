@@ -1,4 +1,4 @@
-import { Pencil, Trash2, Upload, CheckCircle } from "lucide-react";
+import { Pencil, Trash2, Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
 	Dialog,
@@ -30,8 +30,9 @@ import {
 	ComboboxList,
 } from "~/components/ui/combobox";
 import { useFetcher } from "react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Despesa } from "~/components/columns-desp";
+import { CONTAS_CORRENTES } from "~/lib/contas-correntes";
 
 const CONTAS = [
 	"Revenda",
@@ -39,9 +40,12 @@ const CONTAS = [
 	"Impostos",
 	"Pessoal",
 	"Transporte",
+	"Moacir",
 ] as const;
 const TIPOS = ["fixo", "variavel"] as const;
 const LOJAS = ["QI", "QNE", "NRT", "SDS"] as const;
+
+const ACTION_URL = "/despesas";
 
 function formatDateForInput(d: Date | null): string {
 	if (!d) return "";
@@ -54,37 +58,48 @@ function formatDateForInput(d: Date | null): string {
 
 interface DespesaSelectionActionsProps {
 	selectedRows: Despesa[];
-	variant: "despesas" | "contas_a_pagar";
 	fornecedores: { id: string; nome: string | null }[];
 	onClearSelection?: () => void;
 }
 
 export function DespesaSelectionActions({
 	selectedRows,
-	variant,
 	fornecedores,
 	onClearSelection,
 }: DespesaSelectionActionsProps) {
 	const fetcher = useFetcher<{ errors?: Record<string, string[]> }>();
 	const [editOpen, setEditOpen] = useState(false);
 	const [uploadOpen, setUploadOpen] = useState(false);
+	const uploadSubmittedRef = useRef(false);
 
 	const despesa = selectedRows[0] ?? null;
 	const busy = fetcher.state !== "idle";
 
 	const [conta, setConta] = useState(despesa?.conta ?? "");
+	const [contaCorrente, setContaCorrente] = useState(
+		despesa?.contaCorrente ?? "",
+	);
 	const [tipo, setTipo] = useState(despesa?.tipo ?? "");
 	const [loja, setLoja] = useState(despesa?.loja ?? "");
 	const [fornecedor, setFornecedor] = useState(despesa?.fornecedor ?? "");
 
-	const actionUrl = variant === "despesas" ? "/despesas" : "/contas_a_pagar";
 	const uploadFieldName = "comprovante";
 	const uploadLabel = "Comprovante";
 	const uploadIntent = "uploadComprovante";
 
 	useEffect(() => {
+		if (fetcher.state === "idle" && uploadSubmittedRef.current) {
+			uploadSubmittedRef.current = false;
+			if (!fetcher.data?.errors?.comprovante) {
+				setUploadOpen(false);
+			}
+		}
+	}, [fetcher.state, fetcher.data?.errors?.comprovante]);
+
+	useEffect(() => {
 		if (despesa) {
 			setConta(despesa.conta ?? "");
+			setContaCorrente(despesa.contaCorrente ?? "");
 			setTipo(despesa.tipo ?? "");
 			setLoja(despesa.loja ?? "");
 			setFornecedor(despesa.fornecedor ?? "");
@@ -95,16 +110,7 @@ export function DespesaSelectionActions({
 		if (!despesa || !confirm("Excluir esta conta?")) return;
 		fetcher.submit(
 			{ intent: "delete", id: despesa.id },
-			{ method: "post", action: actionUrl },
-		);
-		onClearSelection?.();
-	}
-
-	function handleMarcarPaga() {
-		if (!despesa) return;
-		fetcher.submit(
-			{ intent: "marcarPaga", id: despesa.id },
-			{ method: "post", action: actionUrl },
+			{ method: "post", action: ACTION_URL },
 		);
 		onClearSelection?.();
 	}
@@ -112,6 +118,7 @@ export function DespesaSelectionActions({
 	function openEdit() {
 		if (despesa) {
 			setConta(despesa.conta ?? "");
+			setContaCorrente(despesa.contaCorrente ?? "");
 			setTipo(despesa.tipo ?? "");
 			setLoja(despesa.loja ?? "");
 			setFornecedor(despesa.fornecedor ?? "");
@@ -119,7 +126,6 @@ export function DespesaSelectionActions({
 		}
 	}
 
-	// Apenas 1 linha selecionada para editar/upload
 	if (selectedRows.length === 0) return null;
 	if (selectedRows.length > 1) {
 		return (
@@ -141,17 +147,6 @@ export function DespesaSelectionActions({
 					<Pencil className='mr-1.5 size-4' />
 					Editar
 				</Button>
-				{variant === "contas_a_pagar" && (
-					<Button
-						variant='outline'
-						size='sm'
-						onClick={handleMarcarPaga}
-						disabled={busy}
-						className='h-8'>
-						<CheckCircle className='mr-1.5 size-4' />
-						Marcar como paga
-					</Button>
-				)}
 				<Button
 					variant='outline'
 					size='sm'
@@ -172,18 +167,15 @@ export function DespesaSelectionActions({
 				</Button>
 			</div>
 
-			{/* Dialog Editar */}
 			<Dialog open={editOpen} onOpenChange={setEditOpen}>
 				<DialogContent className='max-w-lg'>
 					<DialogHeader>
-						<DialogTitle>
-							Editar {variant === "despesas" ? "Despesa" : "Conta a Pagar"}
-						</DialogTitle>
+						<DialogTitle>Editar despesa</DialogTitle>
 					</DialogHeader>
 					{despesa && (
 						<fetcher.Form
 							method='post'
-							action={actionUrl}
+							action={ACTION_URL}
 							onSubmit={() => setEditOpen(false)}
 							className='flex flex-col gap-6'>
 							<input type='hidden' name='intent' value='edit' />
@@ -233,6 +225,36 @@ export function DespesaSelectionActions({
 										</SelectContent>
 									</Select>
 									<input type='hidden' name='conta' value={conta} />
+								</Field>
+								<Field className='col-span-2'>
+									<FieldLabel>Conta corrente</FieldLabel>
+									<Combobox
+										items={[...CONTAS_CORRENTES]}
+										value={contaCorrente || null}
+										onValueChange={(v) => setContaCorrente(v ?? "")}>
+										<ComboboxInput
+											placeholder='Selecione a conta corrente'
+											disabled={busy}
+											className='w-full'
+										/>
+										<ComboboxContent>
+											<ComboboxEmpty>
+												Nenhuma conta encontrada.
+											</ComboboxEmpty>
+											<ComboboxList>
+												{(item) => (
+													<ComboboxItem key={item} value={item}>
+														{item}
+													</ComboboxItem>
+												)}
+											</ComboboxList>
+										</ComboboxContent>
+									</Combobox>
+									<input
+										type='hidden'
+										name='contaCorrente'
+										value={contaCorrente}
+									/>
 								</Field>
 								<Field>
 									<FieldLabel>Data</FieldLabel>
@@ -314,7 +336,6 @@ export function DespesaSelectionActions({
 				</DialogContent>
 			</Dialog>
 
-			{/* Dialog Upload */}
 			<Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
 				<DialogContent className='max-w-md'>
 					<DialogHeader>
@@ -323,9 +344,11 @@ export function DespesaSelectionActions({
 					{despesa && (
 						<fetcher.Form
 							method='post'
-							action={actionUrl}
+							action={ACTION_URL}
 							encType='multipart/form-data'
-							onSubmit={() => setUploadOpen(false)}>
+							onSubmit={() => {
+								uploadSubmittedRef.current = true;
+							}}>
 							<input type='hidden' name='intent' value={uploadIntent} />
 							<input type='hidden' name='id' value={despesa.id} />
 							{despesa.data && (
@@ -344,6 +367,11 @@ export function DespesaSelectionActions({
 									required
 									disabled={busy}
 									className='cursor-pointer'
+								/>
+								<FieldError
+									errors={fetcher.data?.errors?.comprovante?.map((m) => ({
+										message: m,
+									}))}
 								/>
 							</Field>
 							<DialogFooter>

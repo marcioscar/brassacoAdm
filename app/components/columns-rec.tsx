@@ -8,6 +8,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 export type Receita = {
 	id: string;
 	conta: string | null;
+	contaCorrente?: string | null;
 	valor: number | null;
 	descricao: string | null;
 	loja: string | null;
@@ -51,6 +52,13 @@ export function getColumns(
 
 	columns.push(
 		{ accessorKey: "conta", header: "Conta" },
+		{
+			id: "contaCorrente",
+			header: "Conta corrente",
+			cell: ({ row }) => (
+				<span>{row.original.contaCorrente ?? "—"}</span>
+			),
+		},
 		{ accessorKey: "loja", header: "Loja" },
 		{
 			accessorKey: "valor",

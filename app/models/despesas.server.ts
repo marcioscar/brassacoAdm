@@ -1,5 +1,6 @@
 import { db } from "~/db.server";
 import { z } from "zod";
+import { contaCorrenteSchema } from "~/lib/contas-correntes";
 
 const formSchema = z.object({
 	conta: z.string().min(1),
@@ -11,6 +12,7 @@ const formSchema = z.object({
 	comprovante: z.string().optional(),
 	boleto: z.string().optional(),
 	loja: z.string().optional(),
+	contaCorrente: contaCorrenteSchema.optional(),
 });
 
 
@@ -100,6 +102,7 @@ export async function updateDespesaPartial(
 		tipo: string;
 		data: Date;
 		loja: string;
+		contaCorrente: string | null;
 	}>,
 ) {
 	return db.despesas.update({ where: { id }, data });

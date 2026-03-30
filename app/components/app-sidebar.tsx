@@ -1,4 +1,5 @@
-import { Link } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useMatches } from "react-router";
 import {
 	BanknoteArrowUp,
 	BanknoteArrowDown,
@@ -16,8 +17,76 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "~/components/ui/sidebar";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "~/components/ui/select";
+import type { MesAno } from "~/lib/mes-ano";
+import { formatarMesAno, parseMesAnoValue } from "~/lib/mes-ano";
+import { useMesAnoContext } from "~/context/mes-ano-context";
+
+type FiltroMesAnoData = {
+	mesAno: MesAno;
+	opcoesMesAno: MesAno[];
+};
+
+function obterFiltroMesAno(matches: ReturnType<typeof useMatches>) {
+	const matchComFiltro = matches.find((match) => {
+		const data = match.data as Partial<FiltroMesAnoData> | undefined;
+		return Boolean(data?.mesAno && data?.opcoesMesAno);
+	});
+
+	if (!matchComFiltro) return null;
+
+	const data = matchComFiltro.data as FiltroMesAnoData;
+	return {
+		pathname: matchComFiltro.pathname,
+		mesAno: data.mesAno,
+		opcoesMesAno: data.opcoesMesAno,
+	};
+}
 
 export function AppSidebar() {
+	const matches = useMatches();
+	const mesAnoContext = useMesAnoContext();
+	const filtroMesAno = obterFiltroMesAno(matches);
+	const [mesAnoValue, setMesAnoValue] = useState("");
+
+	useEffect(() => {
+		if (!filtroMesAno) return;
+		const opcoes = filtroMesAno.opcoesMesAno.map((opcao) =>
+			formatarMesAno(opcao.mes, opcao.ano),
+		);
+		const atual = mesAnoContext
+			? formatarMesAno(mesAnoContext.mesAno.mes, mesAnoContext.mesAno.ano)
+			: "";
+		const valorInicial = opcoes.includes(atual) ? atual : opcoes[0] ?? "";
+		if (!valorInicial) return;
+		setMesAnoValue(valorInicial);
+		if (mesAnoContext) {
+			const parsed = parseMesAnoValue(valorInicial);
+			if (
+				parsed &&
+				(parsed.mes !== mesAnoContext.mesAno.mes ||
+					parsed.ano !== mesAnoContext.mesAno.ano)
+			) {
+				mesAnoContext.setMesAno(parsed);
+			}
+		}
+	}, [filtroMesAno, mesAnoContext]);
+
+	function handleMesAnoChange(value: string) {
+		setMesAnoValue(value);
+		if (!mesAnoContext) return;
+		const parsed = parseMesAnoValue(value);
+		if (parsed) {
+			mesAnoContext.setMesAno(parsed);
+		}
+	}
+
 	return (
 		<Sidebar collapsible='icon'>
 			<SidebarHeader>
@@ -86,6 +155,37 @@ export function AppSidebar() {
 						</SidebarMenu>
 					</SidebarGroupContent>
 				</SidebarGroup>
+				{filtroMesAno ? (
+					<SidebarGroup>
+						<SidebarGroupLabel>Filtro</SidebarGroupLabel>
+						<SidebarGroupContent>
+							<div className='px-2 text-sm'>
+								<label htmlFor='mesAnoSidebar' className='text-xs font-medium'>
+									Mês/Ano
+								</label>
+								<Select value={mesAnoValue} onValueChange={handleMesAnoChange}>
+									<SelectTrigger
+										id='mesAnoSidebar'
+										className='mt-1 w-full text-sm'>
+										<SelectValue placeholder='Selecione o mês' />
+									</SelectTrigger>
+									<SelectContent>
+										{filtroMesAno.opcoesMesAno.map((opcao) => {
+											const valor = formatarMesAno(opcao.mes, opcao.ano);
+											return (
+												<SelectItem
+													key={`${opcao.mes}-${opcao.ano}`}
+													value={valor}>
+													{valor}
+												</SelectItem>
+											);
+										})}
+									</SelectContent>
+								</Select>
+							</div>
+						</SidebarGroupContent>
+					</SidebarGroup>
+				) : null}
 			</SidebarContent>
 		</Sidebar>
 	);

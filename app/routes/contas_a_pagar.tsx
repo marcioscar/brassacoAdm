@@ -1,14 +1,15 @@
 import type { Route } from "./+types/contas_a_pagar";
 import { DataTable } from "~/components/desp-table";
 import { getColumns } from "~/components/columns-desp";
-import { DespesaSelectionActions } from "~/components/despesa-selection-actions";
+import { ContaAPagarSelectionDialog } from "~/components/conta-a-pagar-selection-dialog";
 import {
 	createContaAPagar,
 	getContasAPagar,
 	updateDespesaPartial,
 	deleteDespesa,
 } from "~/models/despesas.server";
-import { uploadReciboAndGetUrl } from "~/models/nextcloud.server";
+import { uploadReciboAndGetUrl } from "~/models/pocketbase.server";
+import { jsonFieldUploadError } from "~/lib/upload-errors";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Plus } from "lucide-react";
@@ -47,6 +48,10 @@ import {
 import { cn, parseLocalDate } from "~/lib/utils";
 import { z } from "zod";
 import { getFornecedores } from "~/models/fornecedor.server";
+import {
+	CONTAS_CORRENTES,
+	contaCorrenteSchema,
+} from "~/lib/contas-correntes";
 
 export function meta({}: Route.MetaArgs) {
 	return [
@@ -81,6 +86,7 @@ const formSchema = z.object({
 	loja: z.enum(LOJAS, {
 		errorMap: () => ({ message: "Loja é obrigatória" }),
 	}),
+	contaCorrente: contaCorrenteSchema,
 });
 
 export async function action({ request }: Route.ActionArgs) {
@@ -95,14 +101,6 @@ export async function action({ request }: Route.ActionArgs) {
 		throw redirect("/contas_a_pagar");
 	}
 
-	if (intent === "marcarPaga") {
-		const id = formData.get("id");
-		if (typeof id === "string") {
-			await updateDespesaPartial(id, { pago: true });
-		}
-		throw redirect("/contas_a_pagar");
-	}
-
 	if (intent === "edit") {
 		const id = formData.get("id");
 		if (typeof id !== "string") {
@@ -110,6 +108,7 @@ export async function action({ request }: Route.ActionArgs) {
 		}
 		const dataStr = formData.get("data");
 		const data = dataStr ? parseLocalDate(String(dataStr)) : undefined;
+		const pago = formData.get("pago") === "true";
 		await updateDespesaPartial(id, {
 			conta: String(formData.get("conta") ?? ""),
 			valor: Number(formData.get("valor")),
@@ -117,6 +116,8 @@ export async function action({ request }: Route.ActionArgs) {
 			fornecedor: String(formData.get("fornecedor") ?? ""),
 			tipo: String(formData.get("tipo") ?? ""),
 			loja: String(formData.get("loja") ?? ""),
+			contaCorrente: String(formData.get("contaCorrente") ?? "") || null,
+			pago,
 			...(data && { data }),
 		});
 		throw redirect("/contas_a_pagar");
@@ -129,13 +130,17 @@ export async function action({ request }: Route.ActionArgs) {
 		if (typeof id !== "string" || !(file instanceof File) || file.size === 0) {
 			return Response.json({ error: "Arquivo obrigatório" }, { status: 400 });
 		}
-		const buffer = Buffer.from(await file.arrayBuffer());
-		const dataPrefix = dataStr
-			? String(dataStr).slice(0, 10)
-			: new Date().toISOString().slice(0, 10);
-		const nomeComData = `${dataPrefix}-${file.name}`;
-		const comprovanteUrl = await uploadReciboAndGetUrl(buffer, nomeComData);
-		await updateDespesaPartial(id, { comprovante: comprovanteUrl });
+		try {
+			const buffer = Buffer.from(await file.arrayBuffer());
+			const dataPrefix = dataStr
+				? String(dataStr).slice(0, 10)
+				: new Date().toISOString().slice(0, 10);
+			const nomeComData = `${dataPrefix}-${file.name}`;
+			const comprovanteUrl = await uploadReciboAndGetUrl(buffer, nomeComData);
+			await updateDespesaPartial(id, { comprovante: comprovanteUrl });
+		} catch (error) {
+			return jsonFieldUploadError("comprovante", error);
+		}
 		throw redirect("/contas_a_pagar");
 	}
 
@@ -157,18 +162,34 @@ export async function action({ request }: Route.ActionArgs) {
 	let boletoUrl: string | undefined;
 	const file = formData.get("boleto");
 	if (file instanceof File && file.size > 0) {
-		const buffer = Buffer.from(await file.arrayBuffer());
-		const dataDespesa = validated.data.data;
-		const dataPrefix = new Date(dataDespesa).toISOString().slice(0, 10); // YYYY-MM-DD
-		const nomeComData = `boleto-${dataPrefix}-${file.name}`;
-		boletoUrl = await uploadReciboAndGetUrl(buffer, nomeComData);
+		try {
+			const buffer = Buffer.from(await file.arrayBuffer());
+			const dataDespesa = validated.data.data;
+			const dataPrefix = new Date(dataDespesa).toISOString().slice(0, 10); // YYYY-MM-DD
+			const nomeComData = `boleto-${dataPrefix}-${file.name}`;
+			boletoUrl = await uploadReciboAndGetUrl(buffer, nomeComData);
+		} catch (error) {
+			return jsonFieldUploadError("boleto", error);
+		}
 	}
 
-	await createContaAPagar({
-		...validated.data,
-		boleto: boletoUrl,
-		pago: false,
-	});
+	try {
+		await createContaAPagar({
+			...validated.data,
+			boleto: boletoUrl,
+			pago: false,
+		});
+	} catch (error) {
+		console.error("createContaAPagar:", error);
+		return Response.json(
+			{
+				errors: {
+					form: ["Não foi possível salvar a conta. Tente novamente."],
+				},
+			},
+			{ status: 500 },
+		);
+	}
 	throw redirect("/contas_a_pagar");
 }
 
@@ -179,8 +200,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 		| "hoje"
 		| "todas";
 	const contasAPagar = await getContasAPagar({ filtro });
+	const getTimestampOrdenacao = (data: Date | null) =>
+		data ? new Date(data).getTime() : Number.POSITIVE_INFINITY;
+	const contasAPagarOrdenadas = [...contasAPagar].sort(
+		(a, b) => getTimestampOrdenacao(a.data) - getTimestampOrdenacao(b.data),
+	);
 	const fornecedores = await getFornecedores();
-	return { contasAPagar, fornecedores, filtro };
+	return { contasAPagar: contasAPagarOrdenadas, fornecedores, filtro };
 }
 export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 	const { contasAPagar, fornecedores, filtro } = loaderData;
@@ -188,6 +214,7 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 	const fetcher = useFetcher<{ errors?: Record<string, string[]> }>();
 	const busy = fetcher.state !== "idle";
 	const [conta, setConta] = useState("");
+	const [contaCorrente, setContaCorrente] = useState("");
 	const [tipo, setTipo] = useState("");
 	const [loja, setLoja] = useState("");
 	const [fornecedor, setFornecedor] = useState("");
@@ -204,6 +231,7 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 			if (!fetcher.data?.errors) {
 				setDialogOpen(false);
 				setConta("");
+				setContaCorrente("");
 				setTipo("");
 				setLoja("");
 				setFornecedor("");
@@ -241,6 +269,11 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 							<DialogHeader>
 								<DialogTitle>Nova Conta a Pagar</DialogTitle>
 							</DialogHeader>
+							{fetcher.data?.errors?.form?.[0] ? (
+								<p className='text-destructive text-sm'>
+									{fetcher.data.errors.form[0]}
+								</p>
+							) : null}
 							<fetcher.Form
 								method='post'
 								encType='multipart/form-data'
@@ -298,6 +331,44 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 										<input type='hidden' name='conta' value={conta} />
 										<FieldError
 											errors={fetcher.data?.errors?.conta?.map((m) => ({
+												message: m,
+											}))}
+										/>
+									</Field>
+									<Field className='col-span-2'>
+										<FieldLabel htmlFor='contaCorrente'>
+											Conta corrente (débito)
+										</FieldLabel>
+										<Combobox
+											items={[...CONTAS_CORRENTES]}
+											value={contaCorrente || null}
+											onValueChange={(v) => setContaCorrente(v ?? "")}>
+											<ComboboxInput
+												id='contaCorrente'
+												placeholder='Selecione a conta corrente'
+												disabled={busy}
+												className='w-full'
+											/>
+											<ComboboxContent>
+												<ComboboxEmpty>
+													Nenhuma conta encontrada.
+												</ComboboxEmpty>
+												<ComboboxList>
+													{(item) => (
+														<ComboboxItem key={item} value={item}>
+															{item}
+														</ComboboxItem>
+													)}
+												</ComboboxList>
+											</ComboboxContent>
+										</Combobox>
+										<input
+											type='hidden'
+											name='contaCorrente'
+											value={contaCorrente}
+										/>
+										<FieldError
+											errors={fetcher.data?.errors?.contaCorrente?.map((m) => ({
 												message: m,
 											}))}
 										/>
@@ -443,11 +514,12 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 				columns={getColumns({ variant: "contas_a_pagar", enableSelection: true })}
 				data={contasAPagar}
 				enableRowSelection
-				selectionActions={(selected) => (
-					<DespesaSelectionActions
+				selectionPlacement='toolbar-multi-only'
+				selectionActions={(selected, { clearSelection }) => (
+					<ContaAPagarSelectionDialog
 						selectedRows={selected}
-						variant="contas_a_pagar"
 						fornecedores={fornecedores}
+						clearSelection={clearSelection}
 					/>
 				)}
 			/>

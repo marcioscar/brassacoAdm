@@ -21,15 +21,22 @@ import {
 } from "~/components/ui/table";
 
 import { Button } from "~/components/ui/button";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Input } from "~/components/ui/input";
+
+export type SelectionTableUtils = { clearSelection: () => void };
 
 interface DataTableProps<TData, TValue> {
 	columns: ColumnDef<TData, TValue>[];
 	data: TData[];
 	enableRowSelection?: boolean;
 	getRowId?: (row: TData) => string;
-	selectionActions?: (selectedRows: TData[]) => React.ReactNode;
+	selectionActions?: (
+		selectedRows: TData[],
+		utils: SelectionTableUtils,
+	) => React.ReactNode;
+	/** toolbar: barra sempre que houver seleção; toolbar-multi-only: barra só com 2+ linhas (1 linha: ações fora da barra, ex.: diálogo) */
+	selectionPlacement?: "toolbar" | "toolbar-multi-only";
 	filterColumn?: string;
 	filterPlaceholder?: string;
 	filterExtra?: React.ReactNode;
@@ -41,6 +48,7 @@ export function DataTable<TData extends { id?: string }, TValue>({
 	enableRowSelection = false,
 	getRowId = (row) => (row as { id: string }).id,
 	selectionActions,
+	selectionPlacement = "toolbar",
 	filterColumn = "fornecedor",
 	filterPlaceholder = "Filtrar por fornecedor...",
 	filterExtra,
@@ -48,6 +56,8 @@ export function DataTable<TData extends { id?: string }, TValue>({
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 	const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+
+	const clearSelection = useCallback(() => setRowSelection({}), []);
 
 	const table = useReactTable({
 		data,
@@ -71,17 +81,33 @@ export function DataTable<TData extends { id?: string }, TValue>({
 
 	const selectedRows = table.getFilteredSelectedRowModel().rows.map((r) => r.original);
 	const hasSelection = selectedRows.length > 0;
+	const selectionUtils: SelectionTableUtils = { clearSelection };
+	const toolbarContent =
+		hasSelection && selectionActions
+			? selectionActions(selectedRows, selectionUtils)
+			: null;
+	const showToolbar =
+		hasSelection &&
+		(selectionPlacement === "toolbar" ||
+			(selectionPlacement === "toolbar-multi-only" && selectedRows.length > 1));
+	const showFloatingSelection =
+		hasSelection &&
+		selectionPlacement === "toolbar-multi-only" &&
+		selectedRows.length === 1;
 
 	return (
 		<>
-			{hasSelection && selectionActions && (
+			{showToolbar && (
 				<div className="mb-4 flex items-center gap-4 rounded-lg border bg-muted/50 px-4 py-3">
 					<span className="text-sm font-medium">
 						{selectedRows.length} linha(s) selecionada(s)
 					</span>
-					{selectionActions(selectedRows)}
+					{selectionPlacement === "toolbar" || selectedRows.length > 1
+						? toolbarContent
+						: null}
 				</div>
 			)}
+			{showFloatingSelection && toolbarContent}
 			{filterColumn && (
 				<div className="flex flex-wrap items-center gap-2 py-4">
 					<Input

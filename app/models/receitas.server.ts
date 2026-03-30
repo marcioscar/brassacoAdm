@@ -1,10 +1,11 @@
 import { db } from "~/db.server";
 import { z } from "zod";
 import { CONTAS, LOJAS } from "./receitas.constants";
+import { contaCorrenteSchema } from "~/lib/contas-correntes";
 
 const formSchema = z.object({
 	descricao: z.string().min(1, "Descrição é obrigatória"),
-	valor: z.number().min(0, "Valor deve ser positivo"),   
+	valor: z.number().min(0, "Valor deve ser positivo"),
 	data: z.date(),
 	conta: z.enum(CONTAS, {
 		errorMap: () => ({ message: "Conta é obrigatória" }),
@@ -12,6 +13,7 @@ const formSchema = z.object({
 	loja: z.enum(LOJAS, {
 		errorMap: () => ({ message: "Loja é obrigatória" }),
 	}),
+	contaCorrente: contaCorrenteSchema,
 }); 
 
 export async function getReceitas() {

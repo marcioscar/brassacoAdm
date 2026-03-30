@@ -20,10 +20,19 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select";
+import {
+	Combobox,
+	ComboboxContent,
+	ComboboxEmpty,
+	ComboboxInput,
+	ComboboxItem,
+	ComboboxList,
+} from "~/components/ui/combobox";
 import { useFetcher } from "react-router";
 import { useState, useEffect } from "react";
 import type { Receita } from "~/components/columns-rec";
 import { CONTAS, LOJAS } from "~/models/receitas.constants";
+import { CONTAS_CORRENTES } from "~/lib/contas-correntes";
 
 function formatDateForInput(d: Date | null): string {
 	if (!d) return "";
@@ -50,11 +59,15 @@ export function ReceitaSelectionActions({
 	const busy = fetcher.state !== "idle";
 
 	const [conta, setConta] = useState(receita?.conta ?? "");
+	const [contaCorrente, setContaCorrente] = useState(
+		receita?.contaCorrente ?? "",
+	);
 	const [loja, setLoja] = useState(receita?.loja ?? "");
 
 	useEffect(() => {
 		if (receita) {
 			setConta(receita.conta ?? "");
+			setContaCorrente(receita.contaCorrente ?? "");
 			setLoja(receita.loja ?? "");
 		}
 	}, [receita?.id]);
@@ -71,6 +84,7 @@ export function ReceitaSelectionActions({
 	function openEdit() {
 		if (receita) {
 			setConta(receita.conta ?? "");
+			setContaCorrente(receita.contaCorrente ?? "");
 			setLoja(receita.loja ?? "");
 			setEditOpen(true);
 		}
@@ -156,6 +170,36 @@ export function ReceitaSelectionActions({
 										</SelectContent>
 									</Select>
 									<input type='hidden' name='loja' value={loja} />
+								</Field>
+								<Field className='col-span-2'>
+									<FieldLabel>Conta corrente</FieldLabel>
+									<Combobox
+										items={[...CONTAS_CORRENTES]}
+										value={contaCorrente || null}
+										onValueChange={(v) => setContaCorrente(v ?? "")}>
+										<ComboboxInput
+											placeholder='Selecione a conta corrente'
+											disabled={busy}
+											className='w-full'
+										/>
+										<ComboboxContent>
+											<ComboboxEmpty>
+												Nenhuma conta encontrada.
+											</ComboboxEmpty>
+											<ComboboxList>
+												{(item) => (
+													<ComboboxItem key={item} value={item}>
+														{item}
+													</ComboboxItem>
+												)}
+											</ComboboxList>
+										</ComboboxContent>
+									</Combobox>
+									<input
+										type='hidden'
+										name='contaCorrente'
+										value={contaCorrente}
+									/>
 								</Field>
 								<Field>
 									<FieldLabel>Data</FieldLabel>

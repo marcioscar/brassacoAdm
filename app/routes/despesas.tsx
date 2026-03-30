@@ -8,7 +8,8 @@ import {
 	updateDespesaPartial,
 	deleteDespesa,
 } from "~/models/despesas.server";
-import { uploadReciboAndGetUrl } from "~/models/nextcloud.server";
+import { uploadReciboAndGetUrl } from "~/models/pocketbase.server";
+import { jsonFieldUploadError } from "~/lib/upload-errors";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Plus } from "lucide-react";
@@ -48,6 +49,10 @@ import {
 import { cn, parseLocalDate } from "~/lib/utils";
 import { z } from "zod";
 import { getFornecedores } from "~/models/fornecedor.server";
+import {
+	CONTAS_CORRENTES,
+	contaCorrenteSchema,
+} from "~/lib/contas-correntes";
 
 export function meta({}: Route.MetaArgs) {
 	return [{ title: "Despesas" }, { name: "description", content: "Despesas" }];
@@ -59,6 +64,7 @@ const CONTAS = [
 	"Impostos",
 	"Pessoal",
 	"Transporte",
+	"Moacir",
 ] as const;
 
 const TIPOS = ["fixo", "variavel"] as const;
@@ -79,6 +85,7 @@ const formSchema = z.object({
 	loja: z.enum(LOJAS, {
 		errorMap: () => ({ message: "Loja é obrigatória" }),
 	}),
+	contaCorrente: contaCorrenteSchema,
 });
 
 export async function action({ request }: Route.ActionArgs) {
@@ -107,6 +114,7 @@ export async function action({ request }: Route.ActionArgs) {
 			fornecedor: String(formData.get("fornecedor") ?? ""),
 			tipo: String(formData.get("tipo") ?? ""),
 			loja: String(formData.get("loja") ?? ""),
+			contaCorrente: String(formData.get("contaCorrente") ?? "") || null,
 			...(data && { data }),
 		});
 		throw redirect("/despesas");
@@ -119,13 +127,17 @@ export async function action({ request }: Route.ActionArgs) {
 		if (typeof id !== "string" || !(file instanceof File) || file.size === 0) {
 			return Response.json({ error: "Arquivo obrigatório" }, { status: 400 });
 		}
-		const buffer = Buffer.from(await file.arrayBuffer());
-		const dataPrefix = dataStr
-			? String(dataStr).slice(0, 10)
-			: new Date().toISOString().slice(0, 10);
-		const nomeComData = `${dataPrefix}-${file.name}`;
-		const comprovanteUrl = await uploadReciboAndGetUrl(buffer, nomeComData);
-		await updateDespesaPartial(id, { comprovante: comprovanteUrl });
+		try {
+			const buffer = Buffer.from(await file.arrayBuffer());
+			const dataPrefix = dataStr
+				? String(dataStr).slice(0, 10)
+				: new Date().toISOString().slice(0, 10);
+			const nomeComData = `${dataPrefix}-${file.name}`;
+			const comprovanteUrl = await uploadReciboAndGetUrl(buffer, nomeComData);
+			await updateDespesaPartial(id, { comprovante: comprovanteUrl });
+		} catch (error) {
+			return jsonFieldUploadError("comprovante", error);
+		}
 		throw redirect("/despesas");
 	}
 
@@ -147,18 +159,34 @@ export async function action({ request }: Route.ActionArgs) {
 	let comprovanteUrl: string | undefined;
 	const file = formData.get("comprovante");
 	if (file instanceof File && file.size > 0) {
-		const buffer = Buffer.from(await file.arrayBuffer());
-		const dataDespesa = validated.data.data;
-		const dataPrefix = new Date(dataDespesa).toISOString().slice(0, 10); // YYYY-MM-DD
-		const nomeComData = `${dataPrefix}-${file.name}`;
-		comprovanteUrl = await uploadReciboAndGetUrl(buffer, nomeComData);
+		try {
+			const buffer = Buffer.from(await file.arrayBuffer());
+			const dataDespesa = validated.data.data;
+			const dataPrefix = new Date(dataDespesa).toISOString().slice(0, 10); // YYYY-MM-DD
+			const nomeComData = `${dataPrefix}-${file.name}`;
+			comprovanteUrl = await uploadReciboAndGetUrl(buffer, nomeComData);
+		} catch (error) {
+			return jsonFieldUploadError("comprovante", error);
+		}
 	}
 
-	await createDespesa({
-		...validated.data,
-		comprovante: comprovanteUrl,
-		pago: true,
-	});
+	try {
+		await createDespesa({
+			...validated.data,
+			comprovante: comprovanteUrl,
+			pago: true,
+		});
+	} catch (error) {
+		console.error("createDespesa:", error);
+		return Response.json(
+			{
+				errors: {
+					form: ["Não foi possível salvar a despesa. Tente novamente."],
+				},
+			},
+			{ status: 500 },
+		);
+	}
 	throw redirect("/despesas");
 }
 
@@ -169,9 +197,12 @@ export async function loader() {
 }
 export default function Despesas({ loaderData }: Route.ComponentProps) {
 	const { despesas, fornecedores } = loaderData;
-	const fetcher = useFetcher<{ errors?: Record<string, string[]> }>();
+	const fetcher = useFetcher<{
+		errors?: Record<string, string[]>;
+	}>();
 	const busy = fetcher.state !== "idle";
 	const [conta, setConta] = useState("");
+	const [contaCorrente, setContaCorrente] = useState("");
 	const [tipo, setTipo] = useState("");
 	const [loja, setLoja] = useState("");
 	const [fornecedor, setFornecedor] = useState("");
@@ -184,6 +215,7 @@ export default function Despesas({ loaderData }: Route.ComponentProps) {
 			if (!fetcher.data?.errors) {
 				setDialogOpen(false);
 				setConta("");
+				setContaCorrente("");
 				setTipo("");
 				setLoja("");
 				setFornecedor("");
@@ -210,6 +242,11 @@ export default function Despesas({ loaderData }: Route.ComponentProps) {
 							<DialogHeader>
 								<DialogTitle>Nova Despesa</DialogTitle>
 							</DialogHeader>
+							{fetcher.data?.errors?.form?.[0] ? (
+								<p className='text-destructive text-sm'>
+									{fetcher.data.errors.form[0]}
+								</p>
+							) : null}
 							<fetcher.Form
 								method='post'
 								encType='multipart/form-data'
@@ -267,6 +304,44 @@ export default function Despesas({ loaderData }: Route.ComponentProps) {
 										<input type='hidden' name='conta' value={conta} />
 										<FieldError
 											errors={fetcher.data?.errors?.conta?.map((m) => ({
+												message: m,
+											}))}
+										/>
+									</Field>
+									<Field className='col-span-2'>
+										<FieldLabel htmlFor='contaCorrente'>
+											Conta corrente
+										</FieldLabel>
+										<Combobox
+											items={[...CONTAS_CORRENTES]}
+											value={contaCorrente || null}
+											onValueChange={(v) => setContaCorrente(v ?? "")}>
+											<ComboboxInput
+												id='contaCorrente'
+												placeholder='Selecione a conta corrente'
+												disabled={busy}
+												className='w-full'
+											/>
+											<ComboboxContent>
+												<ComboboxEmpty>
+													Nenhuma conta encontrada.
+												</ComboboxEmpty>
+												<ComboboxList>
+													{(item) => (
+														<ComboboxItem key={item} value={item}>
+															{item}
+														</ComboboxItem>
+													)}
+												</ComboboxList>
+											</ComboboxContent>
+										</Combobox>
+										<input
+											type='hidden'
+											name='contaCorrente'
+											value={contaCorrente}
+										/>
+										<FieldError
+											errors={fetcher.data?.errors?.contaCorrente?.map((m) => ({
 												message: m,
 											}))}
 										/>
@@ -412,11 +487,11 @@ export default function Despesas({ loaderData }: Route.ComponentProps) {
 				columns={getColumns({ variant: "despesas", enableSelection: true })}
 				data={despesas}
 				enableRowSelection
-				selectionActions={(selected) => (
+				selectionActions={(selected, { clearSelection }) => (
 					<DespesaSelectionActions
 						selectedRows={selected}
-						variant="despesas"
 						fornecedores={fornecedores}
+						onClearSelection={clearSelection}
 					/>
 				)}
 			/>

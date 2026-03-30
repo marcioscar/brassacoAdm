@@ -10,17 +10,18 @@ datasource db {
 // Exemplo de um modelo de usuário para o MongoDB
 
 model despesas {
-    id          String    @id @default(auto()) @map("_id") @db.ObjectId
-    conta       String?
-    valor       Float?
-    descricao   String?
-    fornecedor  String?
-    tipo        String?
-    data        DateTime?
-    comprovante String?
-    boleto      String?
-    pago        Boolean?  @default(false)
-    loja        String?
+    id            String    @id @default(auto()) @map("_id") @db.ObjectId
+    conta         String?
+    valor         Float?
+    descricao     String?
+    fornecedor    String?
+    tipo          String?
+    data          DateTime?
+    comprovante   String?
+    boleto        String?
+    pago          Boolean?  @default(false)
+    loja          String?
+    contaCorrente String?
 }
 
 model fornecedores {
@@ -29,12 +30,13 @@ model fornecedores {
 }
 
 model receitas {
-    id        String    @id @default(auto()) @map("_id") @db.ObjectId
-    conta     String?
-    valor     Float?
-    descricao String?
-    loja      String?
-    data      DateTime? @default(now())
+    id            String    @id @default(auto()) @map("_id") @db.ObjectId
+    conta         String?
+    valor         Float?
+    descricao     String?
+    loja          String?
+    data          DateTime? @default(now())
+    contaCorrente String?
 }
 
 model compras {
@@ -43,4 +45,31 @@ model compras {
     fornecedor String?
     nf         Json?
     data       DateTime? @default(now())
+}
+
+model estoque {
+    id    String    @id @default(auto()) @map("_id") @db.ObjectId
+    valor Float?
+    data  DateTime? @default(now())
+}
+
+type Exercicio {
+    nome       String?
+    Repeticoes String?
+    obs        String?
+    video      String?
+    carga      String?
+}
+
+type Extrato {
+    data      DateTime
+    descricao String
+    valor     Float
+}
+
+model contas_corrente {
+    id       String    @id @default(auto()) @map("_id") @db.ObjectId
+    nome     String
+    saldo    Float
+    extratos Extrato[]
 }

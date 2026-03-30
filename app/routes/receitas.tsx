@@ -28,9 +28,21 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select";
+import {
+	Combobox,
+	ComboboxContent,
+	ComboboxEmpty,
+	ComboboxInput,
+	ComboboxItem,
+	ComboboxList,
+} from "~/components/ui/combobox";
 import { useFetcher, redirect } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { CONTAS, LOJAS } from "~/models/receitas.constants";
+import {
+	CONTAS_CORRENTES,
+	contaCorrenteSchema,
+} from "~/lib/contas-correntes";
 import { parseLocalDate } from "~/lib/utils";
 import { z } from "zod";
 
@@ -48,6 +60,7 @@ const formSchema = z.object({
 	valor: z.coerce.number().min(0, "Valor deve ser positivo"),
 	descricao: z.string().min(1, "Descrição é obrigatória"),
 	data: z.coerce.date(),
+	contaCorrente: contaCorrenteSchema,
 });
 
 export async function action({ request }: Route.ActionArgs) {
@@ -72,6 +85,7 @@ export async function action({ request }: Route.ActionArgs) {
 			loja: String(formData.get("loja") ?? ""),
 			valor: Number(formData.get("valor")),
 			descricao: String(formData.get("descricao") ?? ""),
+			contaCorrente: String(formData.get("contaCorrente") ?? ""),
 			data: formData.get("data")
 				? parseLocalDate(String(formData.get("data")))
 				: new Date(),
@@ -114,6 +128,7 @@ export default function Receitas({ loaderData }: Route.ComponentProps) {
 	const fetcher = useFetcher<{ errors?: Record<string, string[]> }>();
 	const busy = fetcher.state !== "idle";
 	const [conta, setConta] = useState("");
+	const [contaCorrente, setContaCorrente] = useState("");
 	const [loja, setLoja] = useState("");
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const submittedRef = useRef(false);
@@ -124,6 +139,7 @@ export default function Receitas({ loaderData }: Route.ComponentProps) {
 			if (!fetcher.data?.errors) {
 				setDialogOpen(false);
 				setConta("");
+				setContaCorrente("");
 				setLoja("");
 			}
 		}
@@ -191,6 +207,44 @@ export default function Receitas({ loaderData }: Route.ComponentProps) {
 										<input type='hidden' name='loja' value={loja} />
 										<FieldError
 											errors={fetcher.data?.errors?.loja?.map((m) => ({
+												message: m,
+											}))}
+										/>
+									</Field>
+									<Field className='col-span-2'>
+										<FieldLabel htmlFor='contaCorrente'>
+											Conta corrente
+										</FieldLabel>
+										<Combobox
+											items={[...CONTAS_CORRENTES]}
+											value={contaCorrente || null}
+											onValueChange={(v) => setContaCorrente(v ?? "")}>
+											<ComboboxInput
+												id='contaCorrente'
+												placeholder='Selecione a conta corrente'
+												disabled={busy}
+												className='w-full'
+											/>
+											<ComboboxContent>
+												<ComboboxEmpty>
+													Nenhuma conta encontrada.
+												</ComboboxEmpty>
+												<ComboboxList>
+													{(item) => (
+														<ComboboxItem key={item} value={item}>
+															{item}
+														</ComboboxItem>
+													)}
+												</ComboboxList>
+											</ComboboxContent>
+										</Combobox>
+										<input
+											type='hidden'
+											name='contaCorrente'
+											value={contaCorrente}
+										/>
+										<FieldError
+											errors={fetcher.data?.errors?.contaCorrente?.map((m) => ({
 												message: m,
 											}))}
 										/>
@@ -267,9 +321,10 @@ export default function Receitas({ loaderData }: Route.ComponentProps) {
 				data={receitas}
 				enableRowSelection
 				getRowId={(row) => row.id}
-				selectionActions={(selected) => (
+				selectionActions={(selected, { clearSelection }) => (
 					<ReceitaSelectionActions
 						selectedRows={selected}
+						onClearSelection={clearSelection}
 					/>
 				)}
 				filterColumn='descricao'
