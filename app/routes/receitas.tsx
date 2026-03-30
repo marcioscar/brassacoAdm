@@ -43,6 +43,7 @@ import {
 	CONTAS_CORRENTES,
 	contaCorrenteSchema,
 } from "~/lib/contas-correntes";
+import { responseIfContaCorrenteAusente } from "~/models/contas-corrente.server";
 import { parseLocalDate } from "~/lib/utils";
 import { z } from "zod";
 
@@ -97,7 +98,13 @@ export async function action({ request }: Route.ActionArgs) {
 				{ status: 400 },
 			);
 		}
-		await updateReceita(id, validated.data);
+		try {
+			await updateReceita(id, validated.data);
+		} catch (error) {
+			const res = responseIfContaCorrenteAusente(error);
+			if (res) return res;
+			throw error;
+		}
 		throw redirect("/receitas");
 	}
 
@@ -114,7 +121,13 @@ export async function action({ request }: Route.ActionArgs) {
 			{ status: 400 },
 		);
 	}
-	await createReceita(validated.data);
+	try {
+		await createReceita(validated.data);
+	} catch (error) {
+		const res = responseIfContaCorrenteAusente(error);
+		if (res) return res;
+		throw error;
+	}
 	throw redirect("/receitas");
 }
 

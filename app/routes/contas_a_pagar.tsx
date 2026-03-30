@@ -52,6 +52,7 @@ import {
 	CONTAS_CORRENTES,
 	contaCorrenteSchema,
 } from "~/lib/contas-correntes";
+import { responseIfContaCorrenteAusente } from "~/models/contas-corrente.server";
 
 export function meta({}: Route.MetaArgs) {
 	return [
@@ -109,17 +110,23 @@ export async function action({ request }: Route.ActionArgs) {
 		const dataStr = formData.get("data");
 		const data = dataStr ? parseLocalDate(String(dataStr)) : undefined;
 		const pago = formData.get("pago") === "true";
-		await updateDespesaPartial(id, {
-			conta: String(formData.get("conta") ?? ""),
-			valor: Number(formData.get("valor")),
-			descricao: String(formData.get("descricao") ?? ""),
-			fornecedor: String(formData.get("fornecedor") ?? ""),
-			tipo: String(formData.get("tipo") ?? ""),
-			loja: String(formData.get("loja") ?? ""),
-			contaCorrente: String(formData.get("contaCorrente") ?? "") || null,
-			pago,
-			...(data && { data }),
-		});
+		try {
+			await updateDespesaPartial(id, {
+				conta: String(formData.get("conta") ?? ""),
+				valor: Number(formData.get("valor")),
+				descricao: String(formData.get("descricao") ?? ""),
+				fornecedor: String(formData.get("fornecedor") ?? ""),
+				tipo: String(formData.get("tipo") ?? ""),
+				loja: String(formData.get("loja") ?? ""),
+				contaCorrente: String(formData.get("contaCorrente") ?? "") || null,
+				pago,
+				...(data && { data }),
+			});
+		} catch (error) {
+			const res = responseIfContaCorrenteAusente(error);
+			if (res) return res;
+			throw error;
+		}
 		throw redirect("/contas_a_pagar");
 	}
 

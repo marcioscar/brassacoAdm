@@ -29,6 +29,9 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { getEstoqueMesAnterior, getEstoqueMesAtual } from "~/models/estoque";
+import { getContasCorrenteDoCatalogo } from "~/models/contas-corrente.server";
+import { CONTAS_CORRENTES } from "~/lib/contas-correntes";
+import { ContaCorrenteCardHome } from "~/components/conta-corrente-card-home";
 import React from "react";
 
 //grafico de area
@@ -232,6 +235,10 @@ export async function loader() {
 		mesAno,
 	);
 
+	const contasCorrenteResumo = await getContasCorrenteDoCatalogo(
+		CONTAS_CORRENTES,
+	);
+
 	return {
 		receitas,
 		compras,
@@ -240,6 +247,7 @@ export async function loader() {
 		opcoesMesAno,
 		estoqueAtual,
 		estoqueAnterior,
+		contasCorrenteResumo,
 	};
 }
 export default function Home({ loaderData }: Route.ComponentProps) {
@@ -272,6 +280,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		mesAno,
 		estoqueAtual,
 		estoqueAnterior,
+		contasCorrenteResumo,
 	} = loaderData;
 	const mesAnoContext = useMesAnoContext();
 	const mesAnoSelecionado = mesAnoContext?.mesAno ?? mesAno;
@@ -596,6 +605,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						</CardDescription>
 					</CardFooter>
 				</Card>
+				{contasCorrenteResumo.map(({ nome, conta }) => (
+					<ContaCorrenteCardHome key={nome} nome={nome} conta={conta} />
+				))}
 			</div>
 			<Card className='pt-0'>
 				<CardHeader className='flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row'>

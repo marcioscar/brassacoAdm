@@ -65,6 +65,8 @@ type Extrato {
     data      DateTime
     descricao String
     valor     Float
+    refId     String?
+    refTipo   String?
 }
 
 model contas_corrente {

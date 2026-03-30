@@ -49,6 +49,7 @@ import {
 import { cn, parseLocalDate } from "~/lib/utils";
 import { z } from "zod";
 import { getFornecedores } from "~/models/fornecedor.server";
+import { responseIfContaCorrenteAusente } from "~/models/contas-corrente.server";
 import {
 	CONTAS_CORRENTES,
 	contaCorrenteSchema,
@@ -107,16 +108,22 @@ export async function action({ request }: Route.ActionArgs) {
 		}
 		const dataStr = formData.get("data");
 		const data = dataStr ? parseLocalDate(String(dataStr)) : undefined;
-		await updateDespesaPartial(id, {
-			conta: String(formData.get("conta") ?? ""),
-			valor: Number(formData.get("valor")),
-			descricao: String(formData.get("descricao") ?? ""),
-			fornecedor: String(formData.get("fornecedor") ?? ""),
-			tipo: String(formData.get("tipo") ?? ""),
-			loja: String(formData.get("loja") ?? ""),
-			contaCorrente: String(formData.get("contaCorrente") ?? "") || null,
-			...(data && { data }),
-		});
+		try {
+			await updateDespesaPartial(id, {
+				conta: String(formData.get("conta") ?? ""),
+				valor: Number(formData.get("valor")),
+				descricao: String(formData.get("descricao") ?? ""),
+				fornecedor: String(formData.get("fornecedor") ?? ""),
+				tipo: String(formData.get("tipo") ?? ""),
+				loja: String(formData.get("loja") ?? ""),
+				contaCorrente: String(formData.get("contaCorrente") ?? "") || null,
+				...(data && { data }),
+			});
+		} catch (error) {
+			const res = responseIfContaCorrenteAusente(error);
+			if (res) return res;
+			throw error;
+		}
 		throw redirect("/despesas");
 	}
 
@@ -177,6 +184,8 @@ export async function action({ request }: Route.ActionArgs) {
 			pago: true,
 		});
 	} catch (error) {
+		const res = responseIfContaCorrenteAusente(error);
+		if (res) return res;
 		console.error("createDespesa:", error);
 		return Response.json(
 			{

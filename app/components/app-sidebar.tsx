@@ -5,6 +5,8 @@ import {
 	BanknoteArrowDown,
 	ShoppingCart,
 	HandCoins,
+	Home,
+	ChartColumn,
 } from "lucide-react";
 import {
 	Sidebar,
@@ -63,7 +65,7 @@ export function AppSidebar() {
 		const atual = mesAnoContext
 			? formatarMesAno(mesAnoContext.mesAno.mes, mesAnoContext.mesAno.ano)
 			: "";
-		const valorInicial = opcoes.includes(atual) ? atual : opcoes[0] ?? "";
+		const valorInicial = opcoes.includes(atual) ? atual : (opcoes[0] ?? "");
 		if (!valorInicial) return;
 		setMesAnoValue(valorInicial);
 		if (mesAnoContext) {
@@ -120,6 +122,14 @@ export function AppSidebar() {
 					<SidebarGroupLabel>Navegação</SidebarGroupLabel>
 					<SidebarGroupContent>
 						<SidebarMenu>
+							<SidebarMenuItem>
+								<SidebarMenuButton asChild>
+									<Link to='/'>
+										<ChartColumn color='purple' />
+										<span>Resumo</span>
+									</Link>
+								</SidebarMenuButton>
+							</SidebarMenuItem>
 							<SidebarMenuItem>
 								<SidebarMenuButton asChild>
 									<Link to='/despesas'>
