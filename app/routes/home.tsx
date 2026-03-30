@@ -135,7 +135,6 @@ function criarSerieChart(
 	receitasMap: Map<string, number>,
 	despesasMap: Map<string, number>,
 	comprasMap: Map<string, number>,
-	despesasComprasMap: Map<string, number>,
 	variaveisMap: Map<string, number>,
 	fixasMap: Map<string, number>,
 	lucroRealMensal: number,
@@ -150,12 +149,12 @@ function criarSerieChart(
 		const receitasDia = receitasMap.get(dia) ?? 0;
 		const despesasDia = despesasMap.get(dia) ?? 0;
 		const comprasDia = comprasMap.get(dia) ?? 0;
-		const despesasComprasDia = despesasComprasMap.get(dia) ?? 0;
 		const variaveisDia = variaveisMap.get(dia) ?? 0;
 		const fixasDia = fixasMap.get(dia) ?? 0;
+		// Mesma base do card: Compras (NF) + variáveis sem Revenda + fixas
 		const lucroLiquidoDia = calcularLucroLiquido(
 			receitasDia,
-			despesasComprasDia,
+			comprasDia,
 			variaveisDia,
 			fixasDia,
 		);
@@ -450,15 +449,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		fixas: dadosFinanceiros.fixas,
 		estoqueAtual: estoqueAtualTotal,
 		estoqueAnterior: estoqueAnteriorTotal,
-		despesasCompras: totais.despesasCompras,
-		despesasComprasAnterior: totais.despesasComprasAnterior,
 	});
 	const chartData = useMemo(() => {
 		const dias = criarDiasMes(mesAnoSelecionado.mes, mesAnoSelecionado.ano);
 		const receitasMap = criarMapaDiario(receitasFiltradas);
 		const despesasMap = criarMapaDiario(despesasFiltradas);
 		const comprasMap = criarMapaDiario(comprasFiltradas);
-		const despesasComprasMap = criarMapaDiario(despesasCompras);
 		const variaveisMap = criarMapaDiario(despesasVariaveisSemCompras);
 		const fixasMap = criarMapaDiario(despesasFixas);
 		return criarSerieChart(
@@ -466,7 +462,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			receitasMap,
 			despesasMap,
 			comprasMap,
-			despesasComprasMap,
 			variaveisMap,
 			fixasMap,
 			saudeFinanceira.lucroLiquidoReal,
@@ -476,7 +471,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		receitasFiltradas,
 		despesasFiltradas,
 		comprasFiltradas,
-		despesasCompras,
 		despesasVariaveisSemCompras,
 		despesasFixas,
 		mesAnoSelecionado.mes,
