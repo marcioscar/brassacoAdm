@@ -88,12 +88,6 @@ async function pushExtrato(args: {
 	refId: string;
 	refTipo: RefTipoMovimento;
 }) {
-	const conta = await db.contas_corrente.findFirst({
-		where: { nome: args.nomeConta },
-	});
-	if (!conta) {
-		throw new ContaCorrenteNaoEncontradaError(args.nomeConta);
-	}
 	const linha = {
 		data: args.data,
 		descricao: args.descricao,
@@ -101,6 +95,19 @@ async function pushExtrato(args: {
 		refId: args.refId,
 		refTipo: args.refTipo,
 	};
+	const conta = await db.contas_corrente.findFirst({
+		where: { nome: args.nomeConta },
+	});
+	if (!conta) {
+		await db.contas_corrente.create({
+			data: {
+				nome: args.nomeConta,
+				saldo: args.valor,
+				extratos: [linha],
+			},
+		});
+		return;
+	}
 	const extratos = [...(conta.extratos ?? []), linha];
 	const saldo = (conta.saldo ?? 0) + args.valor;
 	await db.contas_corrente.update({

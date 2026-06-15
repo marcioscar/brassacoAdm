@@ -69,9 +69,14 @@ function classNameTituloConta(nome: string) {
 export function ContaCorrenteCardHome({
 	nome,
 	conta,
+	saldoDia1MesAnterior = null,
+	referenciaSaldoMensalLabel = "",
 }: {
 	nome: string;
 	conta: ContaLoader;
+	/** Saldo gravado no 1º acesso do mês civil anterior (ver loader da home). */
+	saldoDia1MesAnterior?: number | null;
+	referenciaSaldoMensalLabel?: string;
 }) {
 	const { extratosOrdenados, semLancamentosNoPeriodo } = useMemo(() => {
 		const bruto = conta?.extratos;
@@ -93,8 +98,15 @@ export function ContaCorrenteCardHome({
 		<Card className='@container/card'>
 			<Collapsible defaultOpen={false} className='group'>
 				<CardHeader className='pb-2'>
-					<CardDescription className={classNameTituloConta(nome)}>
-						{nome}
+					<CardDescription
+						className={`flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-2 ${classNameTituloConta(nome)}`}>
+						<span className='font-medium'>{nome}</span>
+						{saldoDia1MesAnterior != null && referenciaSaldoMensalLabel ? (
+							<span className='text-muted-foreground text-xs font-normal normal-case tabular-nums'>
+								{referenciaSaldoMensalLabel}:{" "}
+								{formatCurrencyBRL(saldoDia1MesAnterior)}
+							</span>
+						) : null}
 					</CardDescription>
 					<CollapsibleTrigger asChild>
 						<button
@@ -111,9 +123,10 @@ export function ContaCorrenteCardHome({
 					<CardContent className='pt-0'>
 						{conta == null ? (
 							<p className='text-muted-foreground text-sm'>
-								Cadastre a conta &quot;{nome}&quot; em{" "}
-								<code className='text-xs'>contas_corrente</code> para ver o
-								saldo e o extrato.
+								Ainda não há registro desta conta no banco. Ao lançar uma
+								receita ou uma despesa <strong>paga</strong> escolhendo
+								&quot;{nome}&quot;, o sistema cria a conta e o movimento no
+								extrato automaticamente.
 							</p>
 						) : extratosOrdenados.length === 0 ? (
 							<p className='text-muted-foreground text-sm'>

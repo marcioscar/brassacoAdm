@@ -87,7 +87,11 @@ const formSchema = z.object({
 	loja: z.enum(LOJAS, {
 		errorMap: () => ({ message: "Loja é obrigatória" }),
 	}),
-	contaCorrente: contaCorrenteSchema,
+	contaCorrente: z.preprocess(
+		(val) =>
+			val === "" || val === null || val === undefined ? undefined : val,
+		contaCorrenteSchema.optional(),
+	),
 });
 
 export async function action({ request }: Route.ActionArgs) {
@@ -110,6 +114,22 @@ export async function action({ request }: Route.ActionArgs) {
 		const dataStr = formData.get("data");
 		const data = dataStr ? parseLocalDate(String(dataStr)) : undefined;
 		const pago = formData.get("pago") === "true";
+
+		let comprovanteUrl: string | undefined;
+		const comprovanteFile = formData.get("comprovante");
+		if (comprovanteFile instanceof File && comprovanteFile.size > 0) {
+			try {
+				const buffer = Buffer.from(await comprovanteFile.arrayBuffer());
+				const dataPrefix = dataStr
+					? String(dataStr).slice(0, 10)
+					: new Date().toISOString().slice(0, 10);
+				const nomeComData = `${dataPrefix}-${comprovanteFile.name}`;
+				comprovanteUrl = await uploadReciboAndGetUrl(buffer, nomeComData);
+			} catch (error) {
+				return jsonFieldUploadError("comprovante", error);
+			}
+		}
+
 		try {
 			await updateDespesaPartial(id, {
 				conta: String(formData.get("conta") ?? ""),
@@ -121,32 +141,12 @@ export async function action({ request }: Route.ActionArgs) {
 				contaCorrente: String(formData.get("contaCorrente") ?? "") || null,
 				pago,
 				...(data && { data }),
+				...(comprovanteUrl && { comprovante: comprovanteUrl }),
 			});
 		} catch (error) {
 			const res = responseIfContaCorrenteAusente(error);
 			if (res) return res;
 			throw error;
-		}
-		throw redirect("/contas_a_pagar");
-	}
-
-	if (intent === "uploadComprovante") {
-		const id = formData.get("id");
-		const file = formData.get("comprovante");
-		const dataStr = formData.get("data");
-		if (typeof id !== "string" || !(file instanceof File) || file.size === 0) {
-			return Response.json({ error: "Arquivo obrigatório" }, { status: 400 });
-		}
-		try {
-			const buffer = Buffer.from(await file.arrayBuffer());
-			const dataPrefix = dataStr
-				? String(dataStr).slice(0, 10)
-				: new Date().toISOString().slice(0, 10);
-			const nomeComData = `${dataPrefix}-${file.name}`;
-			const comprovanteUrl = await uploadReciboAndGetUrl(buffer, nomeComData);
-			await updateDespesaPartial(id, { comprovante: comprovanteUrl });
-		} catch (error) {
-			return jsonFieldUploadError("comprovante", error);
 		}
 		throw redirect("/contas_a_pagar");
 	}
@@ -344,7 +344,7 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 									</Field>
 									<Field className='col-span-2'>
 										<FieldLabel htmlFor='contaCorrente'>
-											Conta corrente (débito)
+											Conta corrente (opcional)
 										</FieldLabel>
 										<Combobox
 											items={[...CONTAS_CORRENTES]}
@@ -352,7 +352,7 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 											onValueChange={(v) => setContaCorrente(v ?? "")}>
 											<ComboboxInput
 												id='contaCorrente'
-												placeholder='Selecione a conta corrente'
+												placeholder='Opcional — ao pagar, use na edição'
 												disabled={busy}
 												className='w-full'
 											/>

@@ -13,7 +13,7 @@ export default function Layout() {
 		<MesAnoProvider initialMesAno={obterMesAnoAtual()}>
 			<SidebarProvider>
 				<AppSidebar />
-				<SidebarInset>
+				<SidebarInset className='min-w-0'>
 					<header className='flex h-16 shrink-0 items-center gap-2 px-4'>
 						<SidebarTrigger className='-ml-1' />
 						<h1 className='flex flex-1 mt-4 justify-center'>

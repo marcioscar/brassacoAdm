@@ -40,6 +40,9 @@ interface DataTableProps<TData, TValue> {
 	filterColumn?: string;
 	filterPlaceholder?: string;
 	filterExtra?: React.ReactNode;
+	/** Busca global em todas as colunas. Quando ativa, substitui o filtro de coluna única. */
+	enableGlobalFilter?: boolean;
+	globalFilterPlaceholder?: string;
 }
 
 export function DataTable<TData extends { id?: string }, TValue>({
@@ -52,10 +55,13 @@ export function DataTable<TData extends { id?: string }, TValue>({
 	filterColumn = "fornecedor",
 	filterPlaceholder = "Filtrar por fornecedor...",
 	filterExtra,
+	enableGlobalFilter = false,
+	globalFilterPlaceholder = "Buscar...",
 }: DataTableProps<TData, TValue>) {
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 	const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+	const [globalFilter, setGlobalFilter] = useState("");
 
 	const clearSelection = useCallback(() => setRowSelection({}), []);
 
@@ -70,12 +76,15 @@ export function DataTable<TData extends { id?: string }, TValue>({
 		getSortedRowModel: getSortedRowModel(),
 		onColumnFiltersChange: setColumnFilters,
 		getFilteredRowModel: getFilteredRowModel(),
+		onGlobalFilterChange: setGlobalFilter,
+		globalFilterFn: "includesString",
 		onRowSelectionChange: setRowSelection,
 		enableRowSelection,
 		state: {
 			sorting,
 			columnFilters,
 			rowSelection,
+			globalFilter,
 		},
 	});
 
@@ -108,20 +117,32 @@ export function DataTable<TData extends { id?: string }, TValue>({
 				</div>
 			)}
 			{showFloatingSelection && toolbarContent}
-			{filterColumn && (
+			{enableGlobalFilter ? (
 				<div className="flex flex-wrap items-center gap-2 py-4">
 					<Input
-						placeholder={filterPlaceholder}
-						value={
-							(table.getColumn(filterColumn)?.getFilterValue() as string) ?? ""
-						}
-						onChange={(event) =>
-							table.getColumn(filterColumn)?.setFilterValue(event.target.value)
-						}
+						placeholder={globalFilterPlaceholder}
+						value={globalFilter}
+						onChange={(event) => setGlobalFilter(event.target.value)}
 						className="max-w-sm"
 					/>
 					{filterExtra}
 				</div>
+			) : (
+				filterColumn && (
+					<div className="flex flex-wrap items-center gap-2 py-4">
+						<Input
+							placeholder={filterPlaceholder}
+							value={
+								(table.getColumn(filterColumn)?.getFilterValue() as string) ?? ""
+							}
+							onChange={(event) =>
+								table.getColumn(filterColumn)?.setFilterValue(event.target.value)
+							}
+							className="max-w-sm"
+						/>
+						{filterExtra}
+					</div>
+				)
 			)}
 			<div className="overflow-x-auto rounded-md border">
 				<Table>

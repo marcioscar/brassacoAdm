@@ -1,3 +1,41 @@
+export function calcularPrecoVenda(params: {
+	custo: number;
+	pctFixos: number;
+	pctVariaveis: number;
+	pctLucro: number;
+}) {
+	const { custo, pctFixos, pctVariaveis, pctLucro } = params;
+	const totalPct = pctFixos + pctVariaveis + pctLucro;
+	if (totalPct >= 100 || custo <= 0) return null;
+	const divisor = 1 - totalPct / 100;
+	const divisorMinimo = 1 - (pctFixos + pctVariaveis) / 100;
+	return {
+		precoSugerido: custo / divisor,
+		precoMinimo: divisorMinimo > 0 ? custo / divisorMinimo : null,
+		markup: 1 / divisor,
+	};
+}
+
+export function verificarPrecoVenda(params: {
+	custo: number;
+	preco: number;
+	pctFixos: number;
+	pctVariaveis: number;
+}) {
+	const { custo, preco, pctFixos, pctVariaveis } = params;
+	if (preco <= 0 || custo < 0) return null;
+	const margemBruta = ((preco - custo) / preco) * 100;
+	const sobraReal =
+		preco - custo - (preco * pctVariaveis) / 100 - (preco * pctFixos) / 100;
+	const status =
+		sobraReal > 0.005
+			? "LUCRATIVO"
+			: sobraReal < -0.005
+				? "PREJUÍZO"
+				: "BREAK-EVEN";
+	return { margemBruta, sobraReal, status };
+}
+
 /**
  * Custos variáveis alinhados aos cards da home:
  * - `compras` = módulo Compras (NF / mercadoria)

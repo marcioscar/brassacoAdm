@@ -7,6 +7,8 @@ import {
 	HandCoins,
 	Home,
 	ChartColumn,
+	ShoppingBag,
+	Calculator,
 } from "lucide-react";
 import {
 	Sidebar,
@@ -159,6 +161,22 @@ export function AppSidebar() {
 									<Link to='/contas_a_pagar'>
 										<HandCoins color='orange' />
 										<span>Contas a Pagar</span>
+									</Link>
+								</SidebarMenuButton>
+							</SidebarMenuItem>
+							<SidebarMenuItem>
+								<SidebarMenuButton asChild>
+									<Link to='/pedidos'>
+										<ShoppingBag color='purple' />
+										<span>Pedidos</span>
+									</Link>
+								</SidebarMenuButton>
+							</SidebarMenuItem>
+							<SidebarMenuItem>
+								<SidebarMenuButton asChild>
+									<Link to='/calculadora-preco'>
+										<Calculator color='teal' />
+										<span>Calculadora de Preço</span>
 									</Link>
 								</SidebarMenuButton>
 							</SidebarMenuItem>

@@ -9,5 +9,7 @@ export default [
    route("contas_a_pagar", "routes/contas_a_pagar.tsx"),
    route("compras", "routes/compras.tsx"),
    route("receitas", "routes/receitas.tsx"),
+   route("pedidos", "routes/pedidos.tsx"),
+   route("calculadora-preco", "routes/calculadora_preco.tsx"),
   ]),
 ] satisfies RouteConfig;

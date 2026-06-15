@@ -6,7 +6,14 @@ import { calcularSaudeFinanceira } from "~/utils/financeiro";
 import { getCompras } from "~/models/compras.server";
 import { getDespesas } from "~/models/despesas.server";
 import { useMesAnoContext } from "~/context/mes-ano-context";
-import { obterMesAnoAtual } from "~/lib/mes-ano";
+import {
+	formatarDia1Mes,
+	isMesmoMesAnoDataCivilUTC,
+	obterMesAnoAtual,
+	obterMesAnoAnterior,
+	obterMesAnoDaDataCivilUTC,
+	type MesAno,
+} from "~/lib/mes-ano";
 import { formatCurrencyBRL } from "~/lib/formatters";
 import {
 	Card,
@@ -30,9 +37,17 @@ import { Button } from "~/components/ui/button";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { getEstoqueMesAnterior, getEstoqueMesAtual } from "~/models/estoque";
 import { getContasCorrenteDoCatalogo } from "~/models/contas-corrente.server";
+import {
+	backfillSaldoMesAnteriorEstimado,
+	ensureSaldoMensalMesCorrente,
+	getSaldosDia1MesAnteriorPorNome,
+} from "~/models/conta-corrente-saldo-mensal.server";
 import { CONTAS_CORRENTES } from "~/lib/contas-correntes";
 import { ContaCorrenteCardHome } from "~/components/conta-corrente-card-home";
 import React from "react";
+
+/** Contas exibidas na home (sem caixa físico / “Dinheiro”). */
+const CONTAS_CORRENTES_HOME = CONTAS_CORRENTES.filter((n) => n !== "Dinheiro");
 
 //grafico de area
 
@@ -45,17 +60,9 @@ export function meta({}: Route.MetaArgs) {
 type ItemComDataValor = { data: Date | string | null; valor: number | null };
 type ItemComPago = { pago?: boolean | null };
 
-type MesAno = { mes: number; ano: number };
-
 function toDate(value: Date | string | null) {
 	if (!value) return null;
 	return value instanceof Date ? value : new Date(value);
-}
-
-function isMesmoMesAno(data: Date | string | null, mes: number, ano: number) {
-	const date = toDate(data);
-	if (!date) return false;
-	return date.getFullYear() === ano && date.getMonth() + 1 === mes;
 }
 
 function filtrarPorMesAno<T extends ItemComDataValor>(
@@ -63,7 +70,9 @@ function filtrarPorMesAno<T extends ItemComDataValor>(
 	mes: number,
 	ano: number,
 ) {
-	return itens.filter((item) => isMesmoMesAno(item.data, mes, ano));
+	return itens.filter((item) =>
+		isMesmoMesAnoDataCivilUTC(item.data, mes, ano),
+	);
 }
 
 function somarValores(itens: ItemComDataValor[]) {
@@ -72,13 +81,6 @@ function somarValores(itens: ItemComDataValor[]) {
 
 function filtrarDespesasPagas<T extends ItemComPago>(itens: T[]) {
 	return itens.filter((item) => item.pago === true);
-}
-
-function obterMesAnoAnterior({ mes, ano }: MesAno) {
-	if (mes === 1) {
-		return { mes: 12, ano: ano - 1 };
-	}
-	return { mes: mes - 1, ano };
 }
 
 function calcularVariacaoPercentual(atual: number, anterior: number) {
@@ -102,7 +104,18 @@ function calcularLucroLiquido(
 function formatarChaveData(value: Date | string | null) {
 	const date = toDate(value);
 	if (!date) return null;
-	return date.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+	return date.toISOString().slice(0, 10);
+}
+
+/** Rótulo pt-BR para chave `YYYY-MM-DD` sem deslocar o dia (calendário = UTC civil). */
+function formatarLabelDiaISO(chave: string) {
+	const [y, m, d] = chave.split("-").map(Number);
+	if (!y || !m || !d) return chave;
+	return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("pt-BR", {
+		month: "short",
+		day: "numeric",
+		timeZone: "UTC",
+	});
 }
 
 function criarMapaDiario(itens: ItemComDataValor[]) {
@@ -117,13 +130,11 @@ function criarMapaDiario(itens: ItemComDataValor[]) {
 }
 
 function criarDiasMes(mes: number, ano: number) {
-	const ultimoDia = new Date(ano, mes, 0).getDate();
+	const ultimoDia = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
 	const dias: string[] = [];
+	const mesStr = String(mes).padStart(2, "0");
 	for (let dia = 1; dia <= ultimoDia; dia += 1) {
-		const data = new Date(Date.UTC(ano, mes - 1, dia));
-		dias.push(
-			data.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }),
-		);
+		dias.push(`${ano}-${mesStr}-${String(dia).padStart(2, "0")}`);
 	}
 	return dias;
 }
@@ -194,11 +205,9 @@ function criarOpcoesMesAno(
 ) {
 	const chaves = new Set<string>();
 	const incluirData = (data: Date | string | null) => {
-		const d = toDate(data);
-		if (!d) return;
-		const mes = d.getMonth() + 1;
-		const ano = d.getFullYear();
-		chaves.add(`${mes}-${ano}`);
+		const m = obterMesAnoDaDataCivilUTC(data);
+		if (!m) return;
+		chaves.add(`${m.mes}-${m.ano}`);
 	};
 
 	receitas.forEach((r) => incluirData(r.data));
@@ -235,7 +244,19 @@ export async function loader() {
 	);
 
 	const contasCorrenteResumo = await getContasCorrenteDoCatalogo(
-		CONTAS_CORRENTES,
+		CONTAS_CORRENTES_HOME,
+	);
+	await ensureSaldoMensalMesCorrente(CONTAS_CORRENTES_HOME);
+	await backfillSaldoMesAnteriorEstimado(CONTAS_CORRENTES_HOME);
+	const mesAnoSaldoRef = obterMesAnoAtual();
+	const prevSaldo = obterMesAnoAnterior(mesAnoSaldoRef);
+	const saldosDia1MesAnterior = await getSaldosDia1MesAnteriorPorNome(
+		CONTAS_CORRENTES_HOME,
+		mesAnoSaldoRef,
+	);
+	const referenciaSaldoMensalLabel = formatarDia1Mes(
+		prevSaldo.mes,
+		prevSaldo.ano,
 	);
 
 	return {
@@ -247,6 +268,8 @@ export async function loader() {
 		estoqueAtual,
 		estoqueAnterior,
 		contasCorrenteResumo,
+		saldosDia1MesAnterior: Object.fromEntries(saldosDia1MesAnterior),
+		referenciaSaldoMensalLabel,
 	};
 }
 export default function Home({ loaderData }: Route.ComponentProps) {
@@ -280,6 +303,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		estoqueAtual,
 		estoqueAnterior,
 		contasCorrenteResumo,
+		saldosDia1MesAnterior,
+		referenciaSaldoMensalLabel,
 	} = loaderData;
 	const mesAnoContext = useMesAnoContext();
 	const mesAnoSelecionado = mesAnoContext?.mesAno ?? mesAno;
@@ -600,7 +625,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					</CardFooter>
 				</Card>
 				{contasCorrenteResumo.map(({ nome, conta }) => (
-					<ContaCorrenteCardHome key={nome} nome={nome} conta={conta} />
+					<ContaCorrenteCardHome
+						key={nome}
+						nome={nome}
+						conta={conta}
+						saldoDia1MesAnterior={saldosDia1MesAnterior[nome] ?? null}
+						referenciaSaldoMensalLabel={referenciaSaldoMensalLabel}
+					/>
 				))}
 			</div>
 			<Card className='pt-0'>
@@ -643,24 +674,17 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								axisLine={false}
 								tickMargin={8}
 								minTickGap={32}
-								tickFormatter={(value) => {
-									const date = new Date(value);
-									return date.toLocaleDateString("pt-BR", {
-										month: "short",
-										day: "numeric",
-									});
-								}}
+								tickFormatter={(value) =>
+									formatarLabelDiaISO(String(value))
+								}
 							/>
 							<ChartTooltip
 								cursor={false}
 								content={
 									<ChartTooltipContent
-										labelFormatter={(value) => {
-											return new Date(value).toLocaleDateString("pt-BR", {
-												month: "short",
-												day: "numeric",
-											});
-										}}
+										labelFormatter={(value) =>
+											formatarLabelDiaISO(String(value))
+										}
 										indicator='dot'
 									/>
 								}

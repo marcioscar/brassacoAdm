@@ -1,4 +1,4 @@
-import { Trash2, Upload } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
 	Dialog,
@@ -56,6 +56,21 @@ function formatDateForInput(d: Date | null): string {
 	const m = String(date.getUTCMonth() + 1).padStart(2, "0");
 	const day = String(date.getUTCDate()).padStart(2, "0");
 	return `${y}-${m}-${day}`;
+}
+
+function hrefComprovanteDespesa(
+	comprovante: string | null | undefined,
+	despesaId: string,
+): string | null {
+	if (comprovante == null || comprovante === "" || !despesaId) return null;
+	const isInvalidUrl =
+		comprovante.includes("/session") || comprovante.endsWith("/session");
+	const isLegacyCloudreve = comprovante.startsWith("cloudreve://");
+	if (isInvalidUrl || isLegacyCloudreve) return `/despesas/comprovante/${despesaId}`;
+	if (comprovante.startsWith("http://") || comprovante.startsWith("https://")) {
+		return comprovante;
+	}
+	return `/despesas/comprovante/${despesaId}`;
 }
 
 type SelectionUtils = { clearSelection: () => void };
@@ -117,6 +132,8 @@ export function ContaAPagarSelectionDialog({
 
 	if (!despesa) return null;
 
+	const comprovanteHref = hrefComprovanteDespesa(despesa.comprovante, despesa.id);
+
 	return (
 		<Dialog open={open} onOpenChange={handleDialogOpenChange}>
 			<DialogContent className='max-h-[90vh] max-w-lg overflow-y-auto'>
@@ -128,6 +145,7 @@ export function ContaAPagarSelectionDialog({
 					id={EDIT_FORM_ID}
 					method='post'
 					action={ACTION_URL}
+					encType='multipart/form-data'
 					className='flex flex-col gap-6'>
 					<input type='hidden' name='intent' value='edit' />
 					<input type='hidden' name='id' value={despesa.id} />
@@ -246,13 +264,13 @@ export function ContaAPagarSelectionDialog({
 							<input type='hidden' name='loja' value={loja} />
 						</Field>
 						<Field className='col-span-2'>
-							<FieldLabel>Conta corrente (débito)</FieldLabel>
+							<FieldLabel>Conta corrente (opcional)</FieldLabel>
 							<Combobox
 								items={[...CONTAS_CORRENTES]}
 								value={contaCorrente || null}
 								onValueChange={(v) => setContaCorrente(v ?? "")}>
 								<ComboboxInput
-									placeholder='Selecione a conta a debitar'
+									placeholder='Conta a debitar, se já souber'
 									disabled={busy}
 									className='w-full'
 								/>
@@ -273,6 +291,39 @@ export function ContaAPagarSelectionDialog({
 								value={contaCorrente}
 							/>
 						</Field>
+						<Field className='col-span-2'>
+							<FieldLabel htmlFor='conta-apagar-comprovante'>
+								Comprovante (opcional)
+							</FieldLabel>
+							{comprovanteHref ? (
+								<p className='text-muted-foreground mb-2 text-xs'>
+									<a
+										href={comprovanteHref}
+										target='_blank'
+										rel='noopener noreferrer'
+										className='text-primary underline'>
+										Ver comprovante atual
+									</a>
+								</p>
+							) : null}
+							<Input
+								id='conta-apagar-comprovante'
+								name='comprovante'
+								type='file'
+								accept='.pdf,.jpg,.jpeg,.png,.webp'
+								disabled={busy}
+								className='cursor-pointer'
+							/>
+							<p className='text-muted-foreground mt-1 text-xs'>
+								Selecione um arquivo e clique em Salvar para substituir ou
+								anexar.
+							</p>
+							<FieldError
+								errors={fetcher.data?.errors?.comprovante?.map((m) => ({
+									message: m,
+								}))}
+							/>
+						</Field>
 						<div className='col-span-2 flex items-center justify-between gap-4 rounded-lg border px-3 py-3'>
 							<Label
 								htmlFor='conta-apagar-pago'
@@ -288,47 +339,6 @@ export function ContaAPagarSelectionDialog({
 						</div>
 					</FieldGroup>
 				</fetcher.Form>
-
-				<div className='flex flex-col gap-2 border-t pt-4'>
-					<p className='text-muted-foreground text-sm font-medium'>
-						Comprovante
-					</p>
-					<fetcher.Form
-						method='post'
-						action={ACTION_URL}
-						encType='multipart/form-data'
-						className='flex flex-col gap-3'>
-						<input type='hidden' name='intent' value='uploadComprovante' />
-						<input type='hidden' name='id' value={despesa.id} />
-						{despesa.data && (
-							<input
-								type='hidden'
-								name='data'
-								value={formatDateForInput(despesa.data)}
-							/>
-						)}
-						<Field>
-							<FieldLabel>Arquivo</FieldLabel>
-							<Input
-								name='comprovante'
-								type='file'
-								accept='.pdf,.jpg,.jpeg,.png,.webp'
-								required
-								disabled={busy}
-								className='cursor-pointer'
-							/>
-							<FieldError
-								errors={fetcher.data?.errors?.comprovante?.map((m) => ({
-									message: m,
-								}))}
-							/>
-						</Field>
-						<Button type='submit' variant='outline' disabled={busy}>
-							<Upload className='mr-2 size-4' />
-							{busy ? "Enviando..." : "Enviar comprovante"}
-						</Button>
-					</fetcher.Form>
-				</div>
 
 				<DialogFooter className='flex-col gap-2 border-t pt-4 sm:flex-row sm:flex-wrap sm:justify-between'>
 					<Button

@@ -7,6 +7,7 @@ export const CONTAS_CORRENTES = [
 	"Bradesco-BEL",
 	"Bradesco-PEL",
 	"Bradesco-SEL",
+    "Dinheiro",
 ] as const;
 
 export const contaCorrenteSchema = z.enum(CONTAS_CORRENTES, {

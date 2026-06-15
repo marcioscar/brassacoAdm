@@ -75,3 +75,27 @@ model contas_corrente {
     saldo    Float
     extratos Extrato[]
 }
+
+model produtos_preco {
+    id          String  @id @default(auto()) @map("_id") @db.ObjectId
+    codigo      String
+    descricao   String
+    unidade     String
+    preco       Float
+    grupo       Int
+    complemento String?
+    quantidade  String?
+}
+
+/**
+ * Saldo da conta gravado no primeiro acesso do mês civil (America/Sao_Paulo).
+ */
+model conta_corrente_saldo_mensal {
+    id        String @id @default(auto()) @map("_id") @db.ObjectId
+    nomeConta String
+    mes       Int
+    ano       Int
+    saldo     Float
+
+    @@unique([nomeConta, mes, ano])
+}
