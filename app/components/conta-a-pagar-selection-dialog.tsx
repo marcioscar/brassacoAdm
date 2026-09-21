@@ -34,7 +34,6 @@ import {
 import { useFetcher } from "react-router";
 import { useEffect, useState } from "react";
 import type { Despesa } from "~/components/columns-desp";
-import { CONTAS_CORRENTES } from "~/lib/contas-correntes";
 
 const CONTAS = [
 	"Revenda",
@@ -89,7 +88,6 @@ export function ContaAPagarSelectionDialog({
 	const despesa = selectedRows[0] ?? null;
 
 	const [conta, setConta] = useState("");
-	const [contaCorrente, setContaCorrente] = useState("");
 	const [tipo, setTipo] = useState("");
 	const [loja, setLoja] = useState("");
 	const [fornecedor, setFornecedor] = useState("");
@@ -98,7 +96,6 @@ export function ContaAPagarSelectionDialog({
 	useEffect(() => {
 		if (selectedRows.length !== 1 || !despesa) return;
 		setConta(despesa.conta ?? "");
-		setContaCorrente(despesa.contaCorrente ?? "");
 		setTipo(despesa.tipo ?? "");
 		setLoja(despesa.loja ?? "");
 		setFornecedor(despesa.fornecedor ?? "");
@@ -262,34 +259,6 @@ export function ContaAPagarSelectionDialog({
 								</SelectContent>
 							</Select>
 							<input type='hidden' name='loja' value={loja} />
-						</Field>
-						<Field className='col-span-2'>
-							<FieldLabel>Conta corrente (opcional)</FieldLabel>
-							<Combobox
-								items={[...CONTAS_CORRENTES]}
-								value={contaCorrente || null}
-								onValueChange={(v) => setContaCorrente(v ?? "")}>
-								<ComboboxInput
-									placeholder='Conta a debitar, se já souber'
-									disabled={busy}
-									className='w-full'
-								/>
-								<ComboboxContent>
-									<ComboboxEmpty>Nenhuma conta encontrada.</ComboboxEmpty>
-									<ComboboxList>
-										{(item) => (
-											<ComboboxItem key={item} value={item}>
-												{item}
-											</ComboboxItem>
-										)}
-									</ComboboxList>
-								</ComboboxContent>
-							</Combobox>
-							<input
-								type='hidden'
-								name='contaCorrente'
-								value={contaCorrente}
-							/>
 						</Field>
 						<Field className='col-span-2'>
 							<FieldLabel htmlFor='conta-apagar-comprovante'>

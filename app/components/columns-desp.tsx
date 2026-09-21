@@ -8,7 +8,6 @@ import { Checkbox } from "~/components/ui/checkbox";
 export type Despesa = {
 	id: string;
 	conta: string | null;
-	contaCorrente?: string | null;
 	valor: number | null;
 	descricao: string | null;
 	fornecedor: string | null;
@@ -55,13 +54,6 @@ export function getColumns(options?: DespesaTableOptions): ColumnDef<Despesa>[] 
 
 	columns.push(
 		{ accessorKey: "conta", header: "Conta" },
-		{
-			accessorKey: "contaCorrente",
-			header: "Conta corrente",
-			cell: ({ row }) => (
-				<span>{row.original.contaCorrente ?? "—"}</span>
-			),
-		},
 		{ accessorKey: "loja", header: "Loja" },
 		{
 			accessorKey: "valor",

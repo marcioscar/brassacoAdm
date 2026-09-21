@@ -21,12 +21,12 @@ model despesas {
     boleto        String?
     pago          Boolean?  @default(false)
     loja          String?
-    contaCorrente String?
 }
 
+// Coleção compartilhada com o ERP: o nome do fornecedor mora em `razaoSocial`.
 model fornecedores {
     id   String  @id @default(auto()) @map("_id") @db.ObjectId
-    nome String?
+    nome String? @map("razaoSocial")
 }
 
 model receitas {
@@ -36,7 +36,6 @@ model receitas {
     descricao     String?
     loja          String?
     data          DateTime? @default(now())
-    contaCorrente String?
 }
 
 model compras {
@@ -61,41 +60,15 @@ type Exercicio {
     carga      String?
 }
 
-type Extrato {
-    data      DateTime
-    descricao String
-    valor     Float
-    refId     String?
-    refTipo   String?
-}
-
-model contas_corrente {
-    id       String    @id @default(auto()) @map("_id") @db.ObjectId
-    nome     String
-    saldo    Float
-    extratos Extrato[]
-}
-
+// Coleção alimentada pelo ERP: `codigo` é numérico e a unidade mora em `unid`.
 model produtos_preco {
     id          String  @id @default(auto()) @map("_id") @db.ObjectId
-    codigo      String
+    codigo      Int
     descricao   String
-    unidade     String
+    unidade     String? @map("unid")
     preco       Float
-    grupo       Int
+    grupo       Float?
     complemento String?
     quantidade  String?
 }
 
-/**
- * Saldo da conta gravado no primeiro acesso do mês civil (America/Sao_Paulo).
- */
-model conta_corrente_saldo_mensal {
-    id        String @id @default(auto()) @map("_id") @db.ObjectId
-    nomeConta String
-    mes       Int
-    ano       Int
-    saldo     Float
-
-    @@unique([nomeConta, mes, ano])
-}

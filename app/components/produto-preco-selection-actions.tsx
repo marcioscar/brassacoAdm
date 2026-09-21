@@ -41,7 +41,7 @@ export function ProdutoPrecoSelectionActions({
 
 	useEffect(() => {
 		if (!produto) return;
-		setCodigo(produto.codigo ?? "");
+		setCodigo(String(produto.codigo ?? ""));
 		setDescricao(produto.descricao ?? "");
 		setUnidade(produto.unidade ?? "");
 		setComplemento(produto.complemento ?? "");
@@ -50,7 +50,7 @@ export function ProdutoPrecoSelectionActions({
 
 	function abrirEdicao() {
 		if (!produto) return;
-		setCodigo(produto.codigo ?? "");
+		setCodigo(String(produto.codigo ?? ""));
 		setDescricao(produto.descricao ?? "");
 		setUnidade(produto.unidade ?? "");
 		setComplemento(produto.complemento ?? "");

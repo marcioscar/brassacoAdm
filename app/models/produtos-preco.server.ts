@@ -6,69 +6,43 @@ export type ProdutoPrecoFiltro = {
 	termo?: string | null;
 };
 
-const TIPOS_NUMERICOS_MONGO = ["int", "long", "double", "decimal"] as const;
-
-function montarFiltroBusca(termo?: string | null) {
+/**
+ * `codigo` é numérico no banco (a coleção vem do ERP), então a busca só compara
+ * o código quando o termo digitado é um número; caso contrário filtra a descrição.
+ */
+function montarFiltroBusca(termo?: string | null): Prisma.produtos_precoWhereInput {
 	const texto = termo?.trim();
 	if (!texto) {
 		return {};
 	}
 
-	return {
-		OR: [
-			{ codigo: { contains: texto, mode: "insensitive" as const } },
-			{ descricao: { contains: texto, mode: "insensitive" as const } },
-		],
-	};
-}
+	const filtros: Prisma.produtos_precoWhereInput[] = [
+		{ descricao: { contains: texto, mode: "insensitive" } },
+	];
 
-function isErroCodigoInconsistente(error: unknown) {
-	return (
-		error instanceof Prisma.PrismaClientKnownRequestError &&
-		error.code === "P2023" &&
-		error.meta?.modelName === "produtos_preco"
-	);
-}
+	const codigo = Number(texto.replace(/[.,]/g, ""));
+	if (Number.isInteger(codigo)) {
+		filtros.push({ codigo });
+	}
 
-async function normalizarCodigoNumericoParaString() {
-	await Promise.all(
-		TIPOS_NUMERICOS_MONGO.map((tipo) =>
-			db.$runCommandRaw({
-				update: "produtos_preco",
-				updates: [
-					{
-						q: { codigo: { $type: tipo } },
-						u: [{ $set: { codigo: { $toString: "$codigo" } } }],
-						multi: true,
-					},
-				],
-			}),
-		),
-	);
+	return { OR: filtros };
 }
 
 export async function getProdutosPreco({ termo }: ProdutoPrecoFiltro = {}) {
-	try {
-		return await db.produtos_preco.findMany({
-			where: montarFiltroBusca(termo),
-			orderBy: [{ codigo: "asc" }, { descricao: "asc" }],
-		});
-	} catch (error) {
-		if (!isErroCodigoInconsistente(error)) {
-			throw error;
-		}
-
-		await normalizarCodigoNumericoParaString();
-
-		return db.produtos_preco.findMany({
-			where: montarFiltroBusca(termo),
-			orderBy: [{ codigo: "asc" }, { descricao: "asc" }],
-		});
-	}
+	return db.produtos_preco.findMany({
+		where: montarFiltroBusca(termo),
+		orderBy: [{ codigo: "asc" }, { descricao: "asc" }],
+	});
 }
 
 const produtoPrecoSchema = z.object({
-	codigo: z.string().trim().min(1, "Código é obrigatório"),
+	// O formulário envia texto; o banco guarda `codigo` como inteiro.
+	codigo: z
+		.string()
+		.trim()
+		.min(1, "Código é obrigatório")
+		.regex(/^\d+$/, "Código deve ser um número inteiro")
+		.transform(Number),
 	descricao: z.string().trim().min(1, "Descrição é obrigatória"),
 	unidade: z.string().trim().min(1, "Unidade é obrigatória"),
 	complemento: z

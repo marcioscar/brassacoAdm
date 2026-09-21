@@ -48,11 +48,6 @@ import {
 import { cn, parseLocalDate } from "~/lib/utils";
 import { z } from "zod";
 import { getFornecedores } from "~/models/fornecedor.server";
-import {
-	CONTAS_CORRENTES,
-	contaCorrenteSchema,
-} from "~/lib/contas-correntes";
-import { responseIfContaCorrenteAusente } from "~/models/contas-corrente.server";
 
 export function meta({}: Route.MetaArgs) {
 	return [
@@ -87,11 +82,6 @@ const formSchema = z.object({
 	loja: z.enum(LOJAS, {
 		errorMap: () => ({ message: "Loja é obrigatória" }),
 	}),
-	contaCorrente: z.preprocess(
-		(val) =>
-			val === "" || val === null || val === undefined ? undefined : val,
-		contaCorrenteSchema.optional(),
-	),
 });
 
 export async function action({ request }: Route.ActionArgs) {
@@ -130,24 +120,17 @@ export async function action({ request }: Route.ActionArgs) {
 			}
 		}
 
-		try {
-			await updateDespesaPartial(id, {
-				conta: String(formData.get("conta") ?? ""),
-				valor: Number(formData.get("valor")),
-				descricao: String(formData.get("descricao") ?? ""),
-				fornecedor: String(formData.get("fornecedor") ?? ""),
-				tipo: String(formData.get("tipo") ?? ""),
-				loja: String(formData.get("loja") ?? ""),
-				contaCorrente: String(formData.get("contaCorrente") ?? "") || null,
-				pago,
-				...(data && { data }),
-				...(comprovanteUrl && { comprovante: comprovanteUrl }),
-			});
-		} catch (error) {
-			const res = responseIfContaCorrenteAusente(error);
-			if (res) return res;
-			throw error;
-		}
+		await updateDespesaPartial(id, {
+			conta: String(formData.get("conta") ?? ""),
+			valor: Number(formData.get("valor")),
+			descricao: String(formData.get("descricao") ?? ""),
+			fornecedor: String(formData.get("fornecedor") ?? ""),
+			tipo: String(formData.get("tipo") ?? ""),
+			loja: String(formData.get("loja") ?? ""),
+			pago,
+			...(data && { data }),
+			...(comprovanteUrl && { comprovante: comprovanteUrl }),
+		});
 		throw redirect("/contas_a_pagar");
 	}
 
@@ -221,7 +204,6 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 	const fetcher = useFetcher<{ errors?: Record<string, string[]> }>();
 	const busy = fetcher.state !== "idle";
 	const [conta, setConta] = useState("");
-	const [contaCorrente, setContaCorrente] = useState("");
 	const [tipo, setTipo] = useState("");
 	const [loja, setLoja] = useState("");
 	const [fornecedor, setFornecedor] = useState("");
@@ -238,7 +220,6 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 			if (!fetcher.data?.errors) {
 				setDialogOpen(false);
 				setConta("");
-				setContaCorrente("");
 				setTipo("");
 				setLoja("");
 				setFornecedor("");
@@ -338,44 +319,6 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 										<input type='hidden' name='conta' value={conta} />
 										<FieldError
 											errors={fetcher.data?.errors?.conta?.map((m) => ({
-												message: m,
-											}))}
-										/>
-									</Field>
-									<Field className='col-span-2'>
-										<FieldLabel htmlFor='contaCorrente'>
-											Conta corrente (opcional)
-										</FieldLabel>
-										<Combobox
-											items={[...CONTAS_CORRENTES]}
-											value={contaCorrente || null}
-											onValueChange={(v) => setContaCorrente(v ?? "")}>
-											<ComboboxInput
-												id='contaCorrente'
-												placeholder='Opcional — ao pagar, use na edição'
-												disabled={busy}
-												className='w-full'
-											/>
-											<ComboboxContent>
-												<ComboboxEmpty>
-													Nenhuma conta encontrada.
-												</ComboboxEmpty>
-												<ComboboxList>
-													{(item) => (
-														<ComboboxItem key={item} value={item}>
-															{item}
-														</ComboboxItem>
-													)}
-												</ComboboxList>
-											</ComboboxContent>
-										</Combobox>
-										<input
-											type='hidden'
-											name='contaCorrente'
-											value={contaCorrente}
-										/>
-										<FieldError
-											errors={fetcher.data?.errors?.contaCorrente?.map((m) => ({
 												message: m,
 											}))}
 										/>

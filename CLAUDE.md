@@ -26,7 +26,7 @@ Docker builds in 4 stages (`node:20-alpine`). The final image runs `npm run star
 | Database client | `app/db.server.ts` | Singleton `PrismaClient`. Import as `import { db } from "~/db.server"`. Never instantiate directly. |
 | Data access | `app/models/*.server.ts` | All Prisma queries live here. Server-only (`.server.ts` = excluded from client bundle). |
 | Routes | `app/routes/*.tsx` | Export `loader` (GET), `action` (mutations), and a default React component. Route tree is in `app/routes.ts`. |
-| Shared utilities | `app/lib/` | Date helpers (`mes-ano.ts`), formatters, constants (`contas-correntes.ts`). |
+| Shared utilities | `app/lib/` | Date helpers (`mes-ano.ts`), formatters. |
 | Business logic | `app/utils/financeiro.ts` | `calcularSaudeFinanceira` — the single source of truth for financial KPIs. |
 | Context | `app/context/mes-ano-context.tsx` | `MesAnoContext` propagates the selected month/year across the layout without prop drilling. |
 | Components | `app/components/` | UI components; `app/components/ui/` holds shadcn primitives. |
@@ -37,22 +37,18 @@ The root layout (`app/routes/_layout.tsx`) wraps every page in `<MesAnoProvider>
 
 | Model | Purpose |
 |---|---|
-| `despesas` | Expenses: `tipo` = `"fixo"` or `"variavel"`, `conta` = category, `pago` flag, optional `contaCorrente` |
-| `receitas` | Revenues: optional `contaCorrente` |
+| `despesas` | Expenses: `tipo` = `"fixo"` or `"variavel"`, `conta` = category, `pago` flag |
+| `receitas` | Revenues |
 | `compras` | Purchases (NF/invoices): `nf` is a JSON blob |
 | `estoque` | Monthly stock snapshots (used for CMV) |
-| `contas_corrente` | Bank accounts: denormalized `saldo` + `extratos[]` array |
-| `conta_corrente_saldo_mensal` | Opening balance per account per month (snapshot written on first access) |
-| `fornecedores` | Supplier names |
-| `produtos_preco` | Product price catalogue |
+| `fornecedores` | Supplier names — shared with the ERP, so `nome` is `@map("razaoSocial")` |
+| `produtos_preco` | Product price catalogue — fed by the ERP: `codigo` is an `Int` and `unidade` is `@map("unid")` |
 
-### Contas corrente mechanics
+The database now lives on the self-hosted instance (`easypanel.quattoracademia.com`), shared with the Quattor ERP, which owns `fornecedores` and `produtos_preco` and writes them in its own shape — hence the `@map`s above. The ERP also owns ~25 other collections in the same database (`vendas`, `notas_fiscais_*`, `produtos`, `ncms`, …) that this app must not touch.
 
-When a `despesa` is **paid** (`pago: true`) and has a `contaCorrente`, `aplicarExtratoDespesa` in `contas-corrente.server.ts` pushes a negative entry into `contas_corrente.extratos` and decrements `saldo`. Likewise, `aplicarExtratoReceita` adds a positive entry for `receitas` with a `contaCorrente`.
+### Contas corrente — removed
 
-On **delete** or **edit**, `removerExtratoPorReferencia(refId, refTipo)` reverses the effect before re-applying. `partialDespesaAfetaExtrato` gates whether a partial update needs to go through this cycle.
-
-The list of valid bank accounts is the canonical constant at `app/lib/contas-correntes.ts` (`CONTAS_CORRENTES`). The home dashboard excludes `"Dinheiro"` from bank cards.
+The bank-account feature (auto-posting extrato entries, `saldo` tracking, the home balance cards and the `contaCorrente` field on despesas/receitas) was **removed from the code**. The MongoDB collections `contas_corrente` and `conta_corrente_saldo_mensal` and the `contaCorrente` field on existing documents were deliberately left untouched in the database, but nothing reads or writes them. Do not reintroduce them without being asked.
 
 ### Date handling — critical
 

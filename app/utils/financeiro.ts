@@ -1,3 +1,27 @@
+/**
+ * O tipo da despesa, nas DUAS grafias que o banco tem.
+ *
+ * O cadastro gravou "fixa" até fevereiro de 2026 e "fixo" de março em diante, e
+ * as duas convivem — 3.434 lançamentos de um lado, 345 do outro. Filtrar por
+ * uma só faz a soma ignorar a outra metade SEM AVISAR, e o sintoma é traiçoeiro:
+ * a despesa fixa aparece zerada e o lucro do mês parece maior do que foi.
+ *
+ * Em janeiro de 2026, por exemplo, os 54 lançamentos fixos são todos "fixa" —
+ * filtrando por "fixo" a home mostrava despesa fixa zero e lucro inflado em
+ * R$ 96.932 naquele mês.
+ *
+ * O formulário continua oferecendo só "fixo" para lançamento NOVO: a ideia é
+ * parar de criar a divergência, não perpetuá-la. Estas funções existem para
+ * LER o que já está gravado.
+ */
+export function ehDespesaFixa(tipo: string | null | undefined) {
+	return tipo === "fixo" || tipo === "fixa";
+}
+
+export function ehDespesaVariavel(tipo: string | null | undefined) {
+	return tipo === "variavel";
+}
+
 export function calcularPrecoVenda(params: {
 	custo: number;
 	pctFixos: number;

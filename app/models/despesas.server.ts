@@ -1,12 +1,5 @@
 import { db } from "~/db.server";
 import { z } from "zod";
-import { contaCorrenteSchema } from "~/lib/contas-correntes";
-import {
-	aplicarExtratoDespesa,
-	despesaGeraMovimento,
-	partialDespesaAfetaExtrato,
-	removerExtratoPorReferencia,
-} from "./contas-corrente.server";
 
 const formSchema = z.object({
 	conta: z.string().min(1),
@@ -18,7 +11,6 @@ const formSchema = z.object({
 	comprovante: z.string().optional(),
 	boleto: z.string().optional(),
 	loja: z.string().optional(),
-	contaCorrente: contaCorrenteSchema.optional(),
 });
 
 
@@ -69,18 +61,9 @@ export async function getContasAPagar(options?: { filtro?: "hoje" | "todas" }) {
 export async function createDespesa(
 	despesa: z.infer<typeof formSchema> & { pago?: boolean },
 ) {
-	const created = await db.despesas.create({
+	return db.despesas.create({
 		data: { ...despesa, pago: despesa.pago ?? false },
 	});
-	try {
-		if (despesaGeraMovimento(created)) {
-			await aplicarExtratoDespesa(created);
-		}
-	} catch (e) {
-		await db.despesas.delete({ where: { id: created.id } });
-		throw e;
-	}
-	return created;
 }
 
 export async function createContaAPagar(
@@ -101,7 +84,6 @@ export async function updateDespesa(id: string, despesa: z.infer<typeof formSche
 }
 
 export async function deleteDespesa(id: string) {
-	await removerExtratoPorReferencia(id, "despesa");
 	return db.despesas.delete({ where: { id } });
 }
 
@@ -119,17 +101,7 @@ export async function updateDespesaPartial(
 		tipo: string;
 		data: Date;
 		loja: string;
-		contaCorrente: string | null;
 	}>,
 ) {
-	const afetaExtrato = partialDespesaAfetaExtrato(data as Record<string, unknown>);
-	if (afetaExtrato) {
-		await removerExtratoPorReferencia(id, "despesa");
-	}
-	const updated = await db.despesas.update({ where: { id }, data });
-	const full = await getDespesaById(id);
-	if (afetaExtrato && full && despesaGeraMovimento(full)) {
-		await aplicarExtratoDespesa(full);
-	}
-	return updated;
+	return db.despesas.update({ where: { id }, data });
 }

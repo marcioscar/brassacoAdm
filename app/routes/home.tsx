@@ -2,12 +2,15 @@ import { useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, XAxis } from "recharts";
 import { getReceitas } from "~/models/receitas.server";
 import type { Route } from "./+types/home";
-import { calcularSaudeFinanceira } from "~/utils/financeiro";
+import {
+	calcularSaudeFinanceira,
+	ehDespesaFixa,
+	ehDespesaVariavel,
+} from "~/utils/financeiro";
 import { getCompras } from "~/models/compras.server";
 import { getDespesas } from "~/models/despesas.server";
 import { useMesAnoContext } from "~/context/mes-ano-context";
 import {
-	formatarDia1Mes,
 	isMesmoMesAnoDataCivilUTC,
 	obterMesAnoAtual,
 	obterMesAnoAnterior,
@@ -36,18 +39,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { getEstoqueMesAnterior, getEstoqueMesAtual } from "~/models/estoque";
-import { getContasCorrenteDoCatalogo } from "~/models/contas-corrente.server";
-import {
-	backfillSaldoMesAnteriorEstimado,
-	ensureSaldoMensalMesCorrente,
-	getSaldosDia1MesAnteriorPorNome,
-} from "~/models/conta-corrente-saldo-mensal.server";
-import { CONTAS_CORRENTES } from "~/lib/contas-correntes";
-import { ContaCorrenteCardHome } from "~/components/conta-corrente-card-home";
 import React from "react";
-
-/** Contas exibidas na home (sem caixa físico / “Dinheiro”). */
-const CONTAS_CORRENTES_HOME = CONTAS_CORRENTES.filter((n) => n !== "Dinheiro");
 
 //grafico de area
 
@@ -243,22 +235,6 @@ export async function loader() {
 		mesAno,
 	);
 
-	const contasCorrenteResumo = await getContasCorrenteDoCatalogo(
-		CONTAS_CORRENTES_HOME,
-	);
-	await ensureSaldoMensalMesCorrente(CONTAS_CORRENTES_HOME);
-	await backfillSaldoMesAnteriorEstimado(CONTAS_CORRENTES_HOME);
-	const mesAnoSaldoRef = obterMesAnoAtual();
-	const prevSaldo = obterMesAnoAnterior(mesAnoSaldoRef);
-	const saldosDia1MesAnterior = await getSaldosDia1MesAnteriorPorNome(
-		CONTAS_CORRENTES_HOME,
-		mesAnoSaldoRef,
-	);
-	const referenciaSaldoMensalLabel = formatarDia1Mes(
-		prevSaldo.mes,
-		prevSaldo.ano,
-	);
-
 	return {
 		receitas,
 		compras,
@@ -267,9 +243,6 @@ export async function loader() {
 		opcoesMesAno,
 		estoqueAtual,
 		estoqueAnterior,
-		contasCorrenteResumo,
-		saldosDia1MesAnterior: Object.fromEntries(saldosDia1MesAnterior),
-		referenciaSaldoMensalLabel,
 	};
 }
 export default function Home({ loaderData }: Route.ComponentProps) {
@@ -302,9 +275,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		mesAno,
 		estoqueAtual,
 		estoqueAnterior,
-		contasCorrenteResumo,
-		saldosDia1MesAnterior,
-		referenciaSaldoMensalLabel,
 	} = loaderData;
 	const mesAnoContext = useMesAnoContext();
 	const mesAnoSelecionado = mesAnoContext?.mesAno ?? mesAno;
@@ -347,7 +317,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		[despesasPagas, mesAnoAnterior.mes, mesAnoAnterior.ano],
 	);
 	const despesasVariaveis = useMemo(
-		() => despesasFiltradas.filter((d) => d.tipo === "variavel"),
+		() => despesasFiltradas.filter((d) => ehDespesaVariavel(d.tipo)),
 		[despesasFiltradas],
 	);
 	const despesasVariaveisSemCompras = useMemo(
@@ -364,15 +334,15 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 	);
 
 	const despesasFixas = useMemo(
-		() => despesasFiltradas.filter((d) => d.tipo === "fixo"),
+		() => despesasFiltradas.filter((d) => ehDespesaFixa(d.tipo)),
 		[despesasFiltradas],
 	);
 	const despesasVariaveisAnterior = useMemo(
-		() => despesasAnteriorFiltradas.filter((d) => d.tipo === "variavel"),
+		() => despesasAnteriorFiltradas.filter((d) => ehDespesaVariavel(d.tipo)),
 		[despesasAnteriorFiltradas],
 	);
 	const despesasFixasAnterior = useMemo(
-		() => despesasAnteriorFiltradas.filter((d) => d.tipo === "fixo"),
+		() => despesasAnteriorFiltradas.filter((d) => ehDespesaFixa(d.tipo)),
 		[despesasAnteriorFiltradas],
 	);
 	const totais = useMemo(
@@ -624,15 +594,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						</CardDescription>
 					</CardFooter>
 				</Card>
-				{contasCorrenteResumo.map(({ nome, conta }) => (
-					<ContaCorrenteCardHome
-						key={nome}
-						nome={nome}
-						conta={conta}
-						saldoDia1MesAnterior={saldosDia1MesAnterior[nome] ?? null}
-						referenciaSaldoMensalLabel={referenciaSaldoMensalLabel}
-					/>
-				))}
 			</div>
 			<Card className='pt-0'>
 				<CardHeader className='flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row'>

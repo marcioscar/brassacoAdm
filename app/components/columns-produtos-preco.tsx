@@ -7,9 +7,9 @@ import { Checkbox } from "~/components/ui/checkbox";
 
 export type ProdutoPreco = {
 	id: string;
-	codigo: string;
+	codigo: number;
 	descricao: string;
-	unidade: string;
+	unidade: string | null;
 	preco: number;
 	complemento?: string | null;
 	quantidade?: string | null;
@@ -18,14 +18,6 @@ export type ProdutoPreco = {
 type ProdutosPrecoTableOptions = {
 	enableSelection?: boolean;
 };
-
-function formatarCodigo(codigo: string) {
-	const texto = String(codigo).trim();
-	if (/^\d{1,3}([.,]\d{3})+$/.test(texto)) {
-		return texto.replace(/[.,]/g, "");
-	}
-	return texto;
-}
 
 function formatarMoeda(valor: number) {
 	return new Intl.NumberFormat("pt-BR", {
@@ -66,7 +58,7 @@ export function getColumnsProdutosPreco(
 
 	columns.push({
 			accessorKey: "codigo",
-			cell: ({ row }) => <span>{formatarCodigo(row.original.codigo)}</span>,
+			cell: ({ row }) => <span>{row.original.codigo}</span>,
 			header: ({ column }) => (
 				<Button
 					variant='ghost'
@@ -92,6 +84,7 @@ export function getColumnsProdutosPreco(
 		{
 			accessorKey: "unidade",
 			header: "Unidade",
+			cell: ({ row }) => row.original.unidade ?? "-",
 		},
 		{
 			accessorKey: "complemento",

@@ -8,7 +8,12 @@ import {
 	obterMesAnoAnterior,
 	formatarMesAno,
 } from "~/lib/mes-ano";
-import { calcularPrecoVenda, verificarPrecoVenda } from "~/utils/financeiro";
+import {
+	calcularPrecoVenda,
+	ehDespesaFixa,
+	ehDespesaVariavel,
+	verificarPrecoVenda,
+} from "~/utils/financeiro";
 import { formatCurrencyBRL } from "~/lib/formatters";
 import {
 	Card,
@@ -39,10 +44,10 @@ export async function loader() {
 
 	const totalReceitas = receitasMes.reduce((s, r) => s + (r.valor ?? 0), 0);
 	const totalVariaveis = despesasMes
-		.filter((d) => d.tipo === "variavel" && d.conta !== "Revenda")
+		.filter((d) => ehDespesaVariavel(d.tipo) && d.conta !== "Revenda")
 		.reduce((s, d) => s + (d.valor ?? 0), 0);
 	const totalFixas = despesasMes
-		.filter((d) => d.tipo === "fixo")
+		.filter((d) => ehDespesaFixa(d.tipo))
 		.reduce((s, d) => s + (d.valor ?? 0), 0);
 
 	const pctVariaveis =

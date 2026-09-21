@@ -1,12 +1,6 @@
 import { db } from "~/db.server";
 import { z } from "zod";
 import { CONTAS, LOJAS } from "./receitas.constants";
-import { contaCorrenteSchema } from "~/lib/contas-correntes";
-import {
-	aplicarExtratoReceita,
-	receitaGeraMovimento,
-	removerExtratoPorReferencia,
-} from "./contas-corrente.server";
 
 const formSchema = z.object({
 	descricao: z.string().min(1, "Descrição é obrigatória"),
@@ -18,7 +12,6 @@ const formSchema = z.object({
 	loja: z.enum(LOJAS, {
 		errorMap: () => ({ message: "Loja é obrigatória" }),
 	}),
-	contaCorrente: contaCorrenteSchema,
 }); 
 
 export async function getReceitas() {
@@ -30,28 +23,13 @@ export async function getReceitas() {
 }
 
 export async function createReceita(receita: z.infer<typeof formSchema>) {
-	const created = await db.receitas.create({ data: receita });
-	try {
-		if (receitaGeraMovimento(created)) {
-			await aplicarExtratoReceita(created);
-		}
-	} catch (e) {
-		await db.receitas.delete({ where: { id: created.id } });
-		throw e;
-	}
-	return created;
+	return db.receitas.create({ data: receita });
 }
 
 export async function updateReceita(id: string, receita: z.infer<typeof formSchema>) {
-	await removerExtratoPorReferencia(id, "receita");
-	const updated = await db.receitas.update({ where: { id }, data: receita });
-	if (receitaGeraMovimento(updated)) {
-		await aplicarExtratoReceita(updated);
-	}
-	return updated;
+	return db.receitas.update({ where: { id }, data: receita });
 }
 
 export async function deleteReceita(id: string) {
-	await removerExtratoPorReferencia(id, "receita");
 	return db.receitas.delete({ where: { id } });
 }

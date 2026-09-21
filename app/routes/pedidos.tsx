@@ -25,21 +25,13 @@ function lerTermoBusca(request: Request) {
 
 type ProdutoParaExportacao = {
 	id: string;
-	codigo: string;
+	codigo: number;
 	descricao: string;
-	unidade: string;
+	unidade: string | null;
 	complemento?: string | null;
 	quantidade?: string | null;
 	preco: number;
 };
-
-function normalizarCodigo(codigo: string) {
-	const texto = String(codigo).trim();
-	if (/^\d{1,3}([.,]\d{3})+$/.test(texto)) {
-		return texto.replace(/[.,]/g, "");
-	}
-	return texto;
-}
 
 function formatarPreco(preco: number) {
 	return new Intl.NumberFormat("pt-BR", {
@@ -74,9 +66,9 @@ function exportarCsv(produtos: ProdutoParaExportacao[]) {
 	];
 	const linhas = produtos.map((produto) =>
 		[
-			escaparCsv(normalizarCodigo(produto.codigo)),
+			escaparCsv(produto.codigo),
 			escaparCsv(produto.descricao),
-			escaparCsv(produto.unidade),
+			escaparCsv(produto.unidade ?? ""),
 			escaparCsv(produto.complemento ?? ""),
 			escaparCsv(produto.quantidade ?? ""),
 			escaparCsv(produto.preco),
@@ -95,9 +87,9 @@ function exportarPdf(produtos: ProdutoParaExportacao[]) {
 		startY: 22,
 		head: [["Codigo", "Descricao", "Unidade", "Complemento", "Quantidade", "Preco"]],
 		body: produtos.map((produto) => [
-			normalizarCodigo(produto.codigo),
+			String(produto.codigo),
 			produto.descricao,
-			produto.unidade,
+			produto.unidade ?? "",
 			produto.complemento ?? "",
 			produto.quantidade ?? "",
 			formatarPreco(produto.preco),

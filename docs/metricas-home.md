@@ -286,23 +286,7 @@ Identificar **concentração** de receita/despesa no mês e se o lucro acumulado
 
 ---
 
-## 15. Contas corrente (cards)
-
-### Conceito
-
-Saldo e movimentação de **contas bancárias/caixa** cadastradas no catálogo, para leitura de **liquidez** e conciliação com a operação.
-
-### Para que serve
-
-Cruzar **resultado econômico** (receitas/despesas de gestão) com **posição em banco** (quanto há disponível e o que entrou/saiu no extrato).
-
-### No sistema
-
-`getContasCorrenteDoCatalogo` + `ContaCorrenteCardHome`; cálculos de saldo/extrato no modelo de contas corrente, não em `home.tsx`.
-
----
-
-## 16. O que a home **não** mostra (mas o código permite derivar)
+## 15. O que a home **não** mostra (mas o código permite derivar)
 
 ### Lucro bruto (conceito)
 
@@ -314,7 +298,7 @@ Seria “tudo que está em despesas vs receitas”, **sem** ajuste Compras NF / 
 
 ---
 
-## 17. Observação técnica (consistência do mês anterior)
+## 16. Observação técnica (consistência do mês anterior)
 
 No mês atual, `despesasVariaveis` **exclui** Revenda. Em `despesasVariaveisAnterior`, o código soma **todas** as variáveis **com** Revenda. Com `comprasAnterior` na mesma fórmula, **Revenda + Compras NF** podem **sobrepor** mercadoria no `lucroLiquidoAnterior`, distorcendo a **variação %** do lucro. Para comparar meses com a mesma lógica, o mês anterior deveria usar **variáveis sem Revenda**, espelhando o mês atual.
 

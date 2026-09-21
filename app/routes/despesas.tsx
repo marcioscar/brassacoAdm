@@ -49,11 +49,6 @@ import {
 import { cn, parseLocalDate } from "~/lib/utils";
 import { z } from "zod";
 import { getFornecedores } from "~/models/fornecedor.server";
-import { responseIfContaCorrenteAusente } from "~/models/contas-corrente.server";
-import {
-	CONTAS_CORRENTES,
-	contaCorrenteSchema,
-} from "~/lib/contas-correntes";
 
 export function meta({}: Route.MetaArgs) {
 	return [{ title: "Despesas" }, { name: "description", content: "Despesas" }];
@@ -86,7 +81,6 @@ const formSchema = z.object({
 	loja: z.enum(LOJAS, {
 		errorMap: () => ({ message: "Loja é obrigatória" }),
 	}),
-	contaCorrente: contaCorrenteSchema,
 });
 
 export async function action({ request }: Route.ActionArgs) {
@@ -108,22 +102,15 @@ export async function action({ request }: Route.ActionArgs) {
 		}
 		const dataStr = formData.get("data");
 		const data = dataStr ? parseLocalDate(String(dataStr)) : undefined;
-		try {
-			await updateDespesaPartial(id, {
-				conta: String(formData.get("conta") ?? ""),
-				valor: Number(formData.get("valor")),
-				descricao: String(formData.get("descricao") ?? ""),
-				fornecedor: String(formData.get("fornecedor") ?? ""),
-				tipo: String(formData.get("tipo") ?? ""),
-				loja: String(formData.get("loja") ?? ""),
-				contaCorrente: String(formData.get("contaCorrente") ?? "") || null,
-				...(data && { data }),
-			});
-		} catch (error) {
-			const res = responseIfContaCorrenteAusente(error);
-			if (res) return res;
-			throw error;
-		}
+		await updateDespesaPartial(id, {
+			conta: String(formData.get("conta") ?? ""),
+			valor: Number(formData.get("valor")),
+			descricao: String(formData.get("descricao") ?? ""),
+			fornecedor: String(formData.get("fornecedor") ?? ""),
+			tipo: String(formData.get("tipo") ?? ""),
+			loja: String(formData.get("loja") ?? ""),
+			...(data && { data }),
+		});
 		throw redirect("/despesas");
 	}
 
@@ -184,8 +171,6 @@ export async function action({ request }: Route.ActionArgs) {
 			pago: true,
 		});
 	} catch (error) {
-		const res = responseIfContaCorrenteAusente(error);
-		if (res) return res;
 		console.error("createDespesa:", error);
 		return Response.json(
 			{
@@ -211,7 +196,6 @@ export default function Despesas({ loaderData }: Route.ComponentProps) {
 	}>();
 	const busy = fetcher.state !== "idle";
 	const [conta, setConta] = useState("");
-	const [contaCorrente, setContaCorrente] = useState("");
 	const [tipo, setTipo] = useState("");
 	const [loja, setLoja] = useState("");
 	const [fornecedor, setFornecedor] = useState("");
@@ -224,7 +208,6 @@ export default function Despesas({ loaderData }: Route.ComponentProps) {
 			if (!fetcher.data?.errors) {
 				setDialogOpen(false);
 				setConta("");
-				setContaCorrente("");
 				setTipo("");
 				setLoja("");
 				setFornecedor("");
@@ -313,44 +296,6 @@ export default function Despesas({ loaderData }: Route.ComponentProps) {
 										<input type='hidden' name='conta' value={conta} />
 										<FieldError
 											errors={fetcher.data?.errors?.conta?.map((m) => ({
-												message: m,
-											}))}
-										/>
-									</Field>
-									<Field className='col-span-2'>
-										<FieldLabel htmlFor='contaCorrente'>
-											Conta corrente
-										</FieldLabel>
-										<Combobox
-											items={[...CONTAS_CORRENTES]}
-											value={contaCorrente || null}
-											onValueChange={(v) => setContaCorrente(v ?? "")}>
-											<ComboboxInput
-												id='contaCorrente'
-												placeholder='Selecione a conta corrente'
-												disabled={busy}
-												className='w-full'
-											/>
-											<ComboboxContent>
-												<ComboboxEmpty>
-													Nenhuma conta encontrada.
-												</ComboboxEmpty>
-												<ComboboxList>
-													{(item) => (
-														<ComboboxItem key={item} value={item}>
-															{item}
-														</ComboboxItem>
-													)}
-												</ComboboxList>
-											</ComboboxContent>
-										</Combobox>
-										<input
-											type='hidden'
-											name='contaCorrente'
-											value={contaCorrente}
-										/>
-										<FieldError
-											errors={fetcher.data?.errors?.contaCorrente?.map((m) => ({
 												message: m,
 											}))}
 										/>
