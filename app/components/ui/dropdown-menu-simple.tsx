@@ -5,7 +5,8 @@ import { cn } from "~/lib/utils";
 
 interface DropdownMenuContextValue {
 	open: boolean;
-	setOpen: (open: boolean) => void;
+	/** O setter do `useState`: aceita valor ou função atualizadora. */
+	setOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const DropdownMenuContext = React.createContext<DropdownMenuContextValue | null>(null);
@@ -24,6 +25,12 @@ function DropdownMenu({ children }: { children: React.ReactNode }) {
 		</DropdownMenuContext.Provider>
 	);
 }
+
+/** As props que o trigger injeta no filho quando `asChild`. */
+type PropsDoFilho = {
+	onClick?: (e: React.MouseEvent) => void;
+	type?: "button" | "submit" | "reset";
+};
 
 function DropdownMenuTrigger({
 	children,
@@ -45,11 +52,12 @@ function DropdownMenuTrigger({
 		setOpen((v) => !v);
 	};
 
-	if (asChild && React.isValidElement(children)) {
-		return React.cloneElement(children as React.ReactElement<{ onClick?: (e: React.MouseEvent) => void }>, {
+	if (asChild && React.isValidElement<PropsDoFilho>(children)) {
+		const filho = children;
+		return React.cloneElement(filho, {
 			type: "button",
 			onClick: (e: React.MouseEvent) => {
-				(children as React.ReactElement<{ onClick?: (e: React.MouseEvent) => void }>).props.onClick?.(e);
+				filho.props.onClick?.(e);
 				handleClick(e);
 			},
 		});
