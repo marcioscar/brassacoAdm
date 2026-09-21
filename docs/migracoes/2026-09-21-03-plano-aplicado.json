@@ -1,0 +1,259 @@
+{
+  "paraVariavel": [
+    "353333323138333137313139",
+    "353539383337323633353237",
+    "66a8ea1c646f5b2a57839a48"
+  ],
+  "paraConta": [
+    {
+      "id": "68b58ddae6d580ea26523ba0",
+      "data": "2025-09-01",
+      "valor": 6072,
+      "fornecedor": "Estecon Contabilidade ",
+      "descricao": "contadora",
+      "tipo": "fixa",
+      "para": "Servicos",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "683450a5d8283c9606c0e41c",
+      "data": "2025-05-26",
+      "valor": 5285.5,
+      "fornecedor": "Pajussara",
+      "descricao": "aluguel NRT",
+      "tipo": "fixa",
+      "para": "Servicos",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "353037363934303937353233",
+      "data": "2021-12-30",
+      "valor": 5210.43,
+      "fornecedor": "Fazenda",
+      "descricao": "IPTU QI",
+      "tipo": "fixa",
+      "para": "Impostos",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "6a1edb1f31fd693566c76e11",
+      "data": "2026-06-02",
+      "valor": 2284.83,
+      "fornecedor": "Brassaco",
+      "descricao": "Andressa",
+      "tipo": "fixo",
+      "para": "Pessoal",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "383633303731343634383739",
+      "data": "2022-06-01",
+      "valor": 1963.93,
+      "fornecedor": "Brassaco",
+      "descricao": "Talita",
+      "tipo": "fixa",
+      "para": "Pessoal",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "6a391cec379073c9de018c1d",
+      "data": "2026-06-22",
+      "valor": 1262.68,
+      "fornecedor": "Sempre Sistemas e Tecnologias",
+      "descricao": "ssitema",
+      "tipo": "fixo",
+      "para": "Servicos",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "383333373630363836323930",
+      "data": "2023-09-15",
+      "valor": 1018.2,
+      "fornecedor": "Fazenda",
+      "descricao": "iptu",
+      "tipo": "fixa",
+      "para": "Impostos",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "373139353239353630333331",
+      "data": "2023-01-19",
+      "valor": 800,
+      "fornecedor": "Brassaco",
+      "descricao": "Antonio",
+      "tipo": "fixa",
+      "para": "Pessoal",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "323837323934383136373032",
+      "data": "2022-12-20",
+      "valor": 681.48,
+      "fornecedor": "Brassaco",
+      "descricao": "Vania",
+      "tipo": "fixa",
+      "para": "Pessoal",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "6666e70b3648ce286f07c4de",
+      "data": "2024-06-10",
+      "valor": 559.15,
+      "fornecedor": "Diversos",
+      "descricao": "transporte",
+      "tipo": "fixa",
+      "para": "Transporte",
+      "motivo": "descrição"
+    },
+    {
+      "id": "68bac5b4e6d580ea26523bea",
+      "data": "2025-09-05",
+      "valor": 350,
+      "fornecedor": "Brassaco",
+      "descricao": "antonio",
+      "tipo": "fixa",
+      "para": "Pessoal",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "343530313031383933353337",
+      "data": "2022-06-02",
+      "valor": 346,
+      "fornecedor": "Brassaco",
+      "descricao": "sidney",
+      "tipo": "fixa",
+      "para": "Pessoal",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "68c7f883e6d580ea26523c4f",
+      "data": "2025-09-15",
+      "valor": 331.94,
+      "fornecedor": "Claro",
+      "descricao": "claro",
+      "tipo": "fixa",
+      "para": "Servicos",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "6176b78101812e38242ffad3",
+      "data": "2021-10-25",
+      "valor": 280.81,
+      "fornecedor": "Vivo Telecom",
+      "descricao": "Telefone",
+      "tipo": "fixa",
+      "para": "Servicos",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "68ef81798bde1038a24abbb6",
+      "data": "2025-10-15",
+      "valor": 250,
+      "fornecedor": "Diversos",
+      "descricao": "bolo",
+      "tipo": "fixa",
+      "para": "Pessoal",
+      "motivo": "descrição"
+    },
+    {
+      "id": "692986ac8bde1038a24abdef",
+      "data": "2025-11-28",
+      "valor": 194.64,
+      "fornecedor": "CEB",
+      "descricao": "cebQNE",
+      "tipo": "fixa",
+      "para": "Servicos",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "68ac4d9a12770d2ef62cd124",
+      "data": "2025-08-25",
+      "valor": 182.96,
+      "fornecedor": "CEB",
+      "descricao": "ceb SDS",
+      "tipo": "fixa",
+      "para": "Servicos",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "67e29b17bdd64966d1626357",
+      "data": "2025-03-25",
+      "valor": 160.42,
+      "fornecedor": "Ceb",
+      "descricao": "ceb sdS",
+      "tipo": "fixa",
+      "para": "Servicos",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "6908a1528bde1038a24abc9c",
+      "data": "2025-11-03",
+      "valor": 148.24,
+      "fornecedor": "CAESB",
+      "descricao": "caesbNRT",
+      "tipo": "fixa",
+      "para": "Servicos",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "68f776168bde1038a24abc03",
+      "data": "2025-10-21",
+      "valor": 135,
+      "fornecedor": "Posto de combustiveis ",
+      "descricao": "diesel",
+      "tipo": "fixa",
+      "para": "Transporte",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "6866729f12770d2ef62cce84",
+      "data": "2025-07-03",
+      "valor": 122,
+      "fornecedor": "Posto de combustiveis ",
+      "descricao": "diesel",
+      "tipo": "fixa",
+      "para": "Transporte",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "333435383333353337343034",
+      "data": "2022-06-28",
+      "valor": 119.21,
+      "fornecedor": "CEB",
+      "descricao": "energia",
+      "tipo": "fixa",
+      "para": "Servicos",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "682c793ad8283c9606c0e3dd",
+      "data": "2025-05-20",
+      "valor": 110,
+      "fornecedor": "Posto de combustiveis ",
+      "descricao": "diesel",
+      "tipo": "fixa",
+      "para": "Transporte",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "313238343534373333383530",
+      "data": "2022-11-22",
+      "valor": 105,
+      "fornecedor": "Posto de combustíveis ",
+      "descricao": "diesel",
+      "tipo": "fixa",
+      "para": "Transporte",
+      "motivo": "fornecedor"
+    },
+    {
+      "id": "333933373031323932383335",
+      "data": "2023-01-03",
+      "valor": 80.44,
+      "fornecedor": "CAESB",
+      "descricao": "caesbNRT",
+      "tipo": "fixa",
+      "para": "Servicos",
+      "motivo": "fornecedor"
+    }
+  ]
+}

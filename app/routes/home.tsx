@@ -320,17 +320,17 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		() => despesasFiltradas.filter((d) => ehDespesaVariavel(d.tipo)),
 		[despesasFiltradas],
 	);
+	/**
+	 * Revenda sai das variáveis porque a mercadoria já entra pelo card Compras (NF).
+	 *
+	 * Tem que ser um filtro DENTRO das variáveis, nunca uma subtração do total de
+	 * Revenda: 155 despesas de Revenda estão gravadas como fixas, e subtraí-las de
+	 * uma soma onde elas nunca entraram derrubava as variáveis abaixo de zero
+	 * (jan/26 chegou a −R$ 7.106) e ainda as contava de novo dentro das fixas.
+	 */
 	const despesasVariaveisSemCompras = useMemo(
 		() => despesasVariaveis.filter((d) => d.conta !== "Revenda"),
 		[despesasVariaveis],
-	);
-	const despesasCompras = useMemo(
-		() => despesasFiltradas.filter((d) => d.conta === "Revenda"),
-		[despesasFiltradas],
-	);
-	const despesasComprasAnterior = useMemo(
-		() => despesasAnteriorFiltradas.filter((d) => d.conta === "Revenda"),
-		[despesasAnteriorFiltradas],
 	);
 
 	const despesasFixas = useMemo(
@@ -340,6 +340,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 	const despesasVariaveisAnterior = useMemo(
 		() => despesasAnteriorFiltradas.filter((d) => ehDespesaVariavel(d.tipo)),
 		[despesasAnteriorFiltradas],
+	);
+	const despesasVariaveisSemComprasAnterior = useMemo(
+		() => despesasVariaveisAnterior.filter((d) => d.conta !== "Revenda"),
+		[despesasVariaveisAnterior],
 	);
 	const despesasFixasAnterior = useMemo(
 		() => despesasAnteriorFiltradas.filter((d) => ehDespesaFixa(d.tipo)),
@@ -353,13 +357,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			comprasAnterior: somarValores(comprasAnteriorFiltradas),
 			despesas: somarValores(despesasFiltradas),
 			despesasAnterior: somarValores(despesasAnteriorFiltradas),
-			despesasVariaveis:
-				somarValores(despesasVariaveis) - somarValores(despesasCompras),
+			despesasVariaveis: somarValores(despesasVariaveisSemCompras),
 			despesasFixas: somarValores(despesasFixas),
-			despesasVariaveisAnterior: somarValores(despesasVariaveisAnterior),
+			despesasVariaveisAnterior: somarValores(
+				despesasVariaveisSemComprasAnterior,
+			),
 			despesasFixasAnterior: somarValores(despesasFixasAnterior),
-			despesasCompras: somarValores(despesasCompras),
-			despesasComprasAnterior: somarValores(despesasComprasAnterior),
 		}),
 		[
 			receitasFiltradas,
@@ -368,12 +371,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			comprasAnteriorFiltradas,
 			despesasFiltradas,
 			despesasAnteriorFiltradas,
-			despesasVariaveis,
+			despesasVariaveisSemCompras,
 			despesasFixas,
-			despesasVariaveisAnterior,
+			despesasVariaveisSemComprasAnterior,
 			despesasFixasAnterior,
-			despesasCompras,
-			despesasComprasAnterior,
 		],
 	);
 	const variacaoReceitas = useMemo(
