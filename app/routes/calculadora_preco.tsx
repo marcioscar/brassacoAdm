@@ -12,6 +12,7 @@ import {
 	calcularPrecoVenda,
 	ehDespesaFixa,
 	ehDespesaVariavel,
+	ehTransferenciaEntreLojas,
 	verificarPrecoVenda,
 } from "~/utils/financeiro";
 import { formatCurrencyBRL } from "~/lib/formatters";
@@ -35,8 +36,11 @@ export async function loader() {
 
 	const [despesas, receitas] = await Promise.all([getDespesas(), getReceitas()]);
 
-	const despesasMes = despesas.filter((d) =>
-		isMesmoMesAnoDataCivilUTC(d.data, mes, ano),
+	// Transferências entre lojas não são despesa e distorceriam os percentuais.
+	const despesasMes = despesas.filter(
+		(d) =>
+			isMesmoMesAnoDataCivilUTC(d.data, mes, ano) &&
+			!ehTransferenciaEntreLojas(d.conta),
 	);
 	const receitasMes = receitas.filter((r) =>
 		isMesmoMesAnoDataCivilUTC(r.data, mes, ano),

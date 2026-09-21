@@ -22,6 +22,23 @@ export function ehDespesaVariavel(tipo: string | null | undefined) {
 	return tipo === "variavel";
 }
 
+/**
+ * Movimentação de dinheiro ENTRE as lojas — não é despesa.
+ *
+ * São 376 lançamentos de 2024 com `conta: "transferencia"`, fornecedor igual ao
+ * nome da loja (Qi/Sds/Qne/Nrt) e descrição no formato "Qi -> Nrt". Todos estão
+ * gravados como `variavel` e `pago`, então a home os somava como despesa: em
+ * agosto/24 R$ 172.929 e em setembro/24 R$ 179.019 do que aparecia como
+ * "despesa variável" era dinheiro apenas mudando de bolso, e o lucro daqueles
+ * meses aparecia menor do que foi.
+ *
+ * Os registros ficam no banco como histórico de movimentação; quem não pode
+ * contá-los é o cálculo.
+ */
+export function ehTransferenciaEntreLojas(conta: string | null | undefined) {
+	return conta === "transferencia";
+}
+
 export function calcularPrecoVenda(params: {
 	custo: number;
 	pctFixos: number;

@@ -6,6 +6,7 @@ import {
 	calcularSaudeFinanceira,
 	ehDespesaFixa,
 	ehDespesaVariavel,
+	ehTransferenciaEntreLojas,
 } from "~/utils/financeiro";
 import { getCompras } from "~/models/compras.server";
 import { getDespesas } from "~/models/despesas.server";
@@ -50,7 +51,7 @@ export function meta({}: Route.MetaArgs) {
 	];
 }
 type ItemComDataValor = { data: Date | string | null; valor: number | null };
-type ItemComPago = { pago?: boolean | null };
+type ItemComPago = { pago?: boolean | null; conta?: string | null };
 
 function toDate(value: Date | string | null) {
 	if (!value) return null;
@@ -71,8 +72,18 @@ function somarValores(itens: ItemComDataValor[]) {
 	return itens.reduce((total, item) => total + Number(item.valor || 0), 0);
 }
 
+/**
+ * Base de TODOS os números de despesa da home: só o que foi pago, e sem as
+ * transferências entre lojas, que não são despesa (ver `ehTransferenciaEntreLojas`).
+ *
+ * A exclusão é feita aqui, na origem, e não em cada soma: assim o card de
+ * despesa total, as fixas, as variáveis e o gráfico diário partem todos da
+ * mesma base — não dá para uma delas esquecer o filtro.
+ */
 function filtrarDespesasPagas<T extends ItemComPago>(itens: T[]) {
-	return itens.filter((item) => item.pago === true);
+	return itens.filter(
+		(item) => item.pago === true && !ehTransferenciaEntreLojas(item.conta),
+	);
 }
 
 function calcularVariacaoPercentual(atual: number, anterior: number) {

@@ -64,6 +64,38 @@ Duas exceções decididas pela descrição, contra a dominância do fornecedor:
 - `2026-09-21-03-plano-aplicado.json` — o destino de cada um e o motivo
   (`fornecedor` = conta dominante, `descrição` = exceção manual)
 
+## 04 — Contas fora da lista do formulário (782 documentos, R$ 1.321.470,07)
+
+O formulário só oferece `Revenda`, `Servicos`, `Impostos`, `Pessoal`,
+`Transporte` e `Moacir`, mas o banco tinha outros cinco valores. Isso deixava o
+campo Conta em branco ao editar esses registros e separaria "Serviços" de
+"Servicos" em qualquer relatório por categoria.
+
+    "Serviços" (cedilha) -> "Servicos"    374 docs   R$ 362.093,13
+    "Imposto"  (singular) -> "Impostos"   326 docs   R$ 802.396,96
+    "Diversos"            -> "Servicos"    59 docs   R$  33.483,98
+    "Contador"            -> "Servicos"    23 docs   R$ 123.496,00
+
+As duas primeiras são grafia. `Contador` e `Diversos` foram dobradas em
+`Servicos` por serem serviço/custeio de fato (contadora; resma de papel,
+limpeza, água) e porque os mesmos fornecedores já tinham a maioria dos
+lançamentos em `Servicos`. Isso FUNDE a distinção "Contador" — se ela precisar
+voltar, o caminho é adicioná-la ao enum do formulário e restaurar pelo backup.
+
+- `2026-09-21-04-contas-fora-do-enum-originais.json` — os 782 originais
+- `2026-09-21-04-plano-aplicado.json` — o de/para de cada id
+
+### O que NÃO foi normalizado: `transferencia` (376 docs, R$ 365.752,17)
+
+Não é problema de nomenclatura, então renomear não resolveria. São
+movimentações entre as lojas — fornecedor igual ao nome da loja (Qi/Sds/Qne/
+Nrt), descrição no formato "Qi -> Nrt" nos 376 — todas de 2024, todas
+`variavel` e `pago`. Não são despesa.
+
+A correção foi no CÓDIGO, não nos dados: `ehTransferenciaEntreLojas` em
+`app/utils/financeiro.ts`, aplicada na base de despesas da home e no loader da
+calculadora de preço. Os registros continuam no banco como histórico.
+
 ## Como reverter
 
 Os arquivos guardam o documento inteiro como estava, incluindo `_id`. Para
@@ -71,17 +103,7 @@ desfazer, regrave `tipo` e `conta` a partir deles casando pelo `_id`.
 
 ## O que ficou de fora, de propósito
 
-Existem contas gravadas fora da lista que o formulário oferece
-(`Revenda`, `Servicos`, `Impostos`, `Pessoal`, `Transporte`, `Moacir`):
-
-    "Serviços"      374   (com cedilha)
-    "transferencia" 376
-    "Imposto"       326   (singular)
-    "Diversos"       59
-    "Contador"       23
-
-Mesma família do `fixa`/`fixo`, mas hoje inofensivo: nenhum cálculo da home
-agrupa por conta — só o filtro de Revenda, que está correto. O efeito visível é
-o campo Conta aparecer em branco na edição desses registros, e qualquer
-relatório por categoria separar "Serviços" de "Servicos". São 1.158 documentos;
-não foram tocados.
+Nada de nomenclatura — depois da migração 04 todas as contas do banco estão
+dentro do enum do formulário, exceto `transferencia`, que foi mantida de caso
+pensado (ver acima: os registros são histórico de movimentação, e quem deixou
+de contá-los foi o cálculo).
