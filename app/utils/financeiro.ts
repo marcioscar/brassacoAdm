@@ -97,6 +97,10 @@ export function verificarPrecoVenda(params: {
  * mercadoria. Só no mês em andamento (sem CMV) caem na base de caixa, e
  * `baseEquilibrio` diz qual foi usada.
  *
+ * Margem bruta, markup e cobertura de estoque também dependem do CMV e ficam
+ * `null` sem ele. Cobertura = estoque médio ÷ CMV × `diasNoPeriodo`: quantos
+ * dias de venda o estoque aguenta no ritmo do mês.
+ *
  * `variaveis` são as despesas variáveis SEM a conta Revenda (impostos,
  * comissões…), para a mercadoria não entrar duas vezes.
  */
@@ -108,6 +112,7 @@ export function calcularSaudeFinanceira(dados: {
 	fixas: number;
 	estoqueInicial: number | null;
 	estoqueFinal: number | null;
+	diasNoPeriodo: number;
 }) {
 	const {
 		faturamento,
@@ -117,6 +122,7 @@ export function calcularSaudeFinanceira(dados: {
 		fixas,
 		estoqueInicial,
 		estoqueFinal,
+		diasNoPeriodo,
 	} = dados;
 	const sobreFaturamento = (valor: number) =>
 		faturamento > 0 ? (valor / faturamento) * 100 : 0;
@@ -145,6 +151,15 @@ export function calcularSaudeFinanceira(dados: {
 		margemEquilibrio > 0 ? fixas / (margemEquilibrio / 100) : 0;
 	const lucroStatus = lucroReal ?? lucro;
 
+	const cmvPositivo = cmv != null && cmv > 0 ? cmv : null;
+	const margemBruta =
+		cmv != null && faturamento > 0 ? sobreFaturamento(faturamento - cmv) : null;
+	const markup = cmvPositivo != null ? faturamento / cmvPositivo : null;
+	const coberturaEstoqueDias =
+		cmvPositivo != null && estoqueInicial != null && estoqueFinal != null
+			? ((estoqueInicial + estoqueFinal) / 2 / cmvPositivo) * diasNoPeriodo
+			: null;
+
 	return {
 		margemContribuicao: margemRS,
 		margemContribuicaoPerc: margemPerc,
@@ -158,6 +173,9 @@ export function calcularSaudeFinanceira(dados: {
 		margemPercReal,
 		lucroLiquidoReal: lucroReal,
 		lucratividadeReal: lucroReal != null ? sobreFaturamento(lucroReal) : null,
+		margemBruta,
+		markup,
+		coberturaEstoqueDias,
 		status: lucroStatus > 0 ? "LUCRO" : "PREJUÍZO",
 	};
 }

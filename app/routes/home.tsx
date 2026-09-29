@@ -9,13 +9,14 @@ import {
 	ehTransferenciaEntreLojas,
 } from "~/utils/financeiro";
 import { getCompras } from "~/models/compras.server";
-import { getDespesas } from "~/models/despesas.server";
+import { getContasAPagar, getDespesas } from "~/models/despesas.server";
 import { useMesAnoContext } from "~/context/mes-ano-context";
 import {
 	isMesmoMesAnoDataCivilUTC,
 	obterMesAnoAtual,
 	obterMesAnoAnterior,
 	obterMesAnoDaDataCivilUTC,
+	obterHojeDataCivilUTC,
 	type MesAno,
 } from "~/lib/mes-ano";
 import { formatCurrencyBRL } from "~/lib/formatters";
@@ -41,6 +42,7 @@ import { Button } from "~/components/ui/button";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { getEstoques } from "~/models/estoque";
 import React from "react";
+import { Link } from "react-router";
 
 //grafico de area
 
@@ -131,6 +133,112 @@ function calcularLucroLiquido(
 ) {
 	const margemRS = faturamento - (revendaPaga + variaveis);
 	return margemRS - fixas;
+}
+
+type DespesaClassificavel = ItemComDataValor & {
+	tipo?: string | null;
+	conta?: string | null;
+};
+
+/**
+ * Separa as despesas pagas nas três parcelas do lucro.
+ *
+ * - `revenda`: conta Revenda em qualquer tipo — o custo da mercadoria na visão
+ *   de caixa (lucro líquido), sem depender de como foi classificada.
+ * - `variaveis`: variáveis SEM Revenda, porque a mercadoria já entra como custo
+ *   à parte (Revenda paga no lucro líquido, CMV no lucro real). Tem que ser um
+ *   filtro DENTRO das variáveis, nunca uma subtração do total de Revenda: já
+ *   houve Revenda gravada como fixa, e subtraí-la de uma soma onde nunca entrou
+ *   derrubava as variáveis abaixo de zero (jan/26 chegou a −R$ 7.106).
+ * - `fixas`: "fixo" e "fixa" (ver `ehDespesaFixa`).
+ */
+function classificarDespesas<T extends DespesaClassificavel>(despesas: T[]) {
+	return {
+		revenda: despesas.filter((d) => d.conta === "Revenda"),
+		variaveis: despesas.filter(
+			(d) => ehDespesaVariavel(d.tipo) && d.conta !== "Revenda",
+		),
+		fixas: despesas.filter((d) => ehDespesaFixa(d.tipo)),
+	};
+}
+
+function diasNoMes({ mes, ano }: MesAno) {
+	return new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+}
+
+/**
+ * Totais e KPIs de UM mês — a mesma conta para o mês selecionado, o anterior
+ * e cada ponto da tendência, para os três nunca divergirem.
+ */
+function resumirMes<D extends DespesaClassificavel>(
+	fontes: {
+		receitas: ItemComDataValor[];
+		compras: ItemComDataValor[];
+		despesasPagas: D[];
+		estoques: LancamentoEstoque[];
+	},
+	mesAno: MesAno,
+) {
+	const { mes, ano } = mesAno;
+	const receitas = filtrarPorMesAno(fontes.receitas, mes, ano);
+	const compras = filtrarPorMesAno(fontes.compras, mes, ano);
+	const despesas = filtrarPorMesAno(fontes.despesasPagas, mes, ano);
+	const { revenda, variaveis, fixas } = classificarDespesas(despesas);
+
+	const totais = {
+		receitas: somarValores(receitas),
+		compras: somarValores(compras),
+		despesas: somarValores(despesas),
+		revenda: somarValores(revenda),
+		variaveis: somarValores(variaveis),
+		fixas: somarValores(fixas),
+	};
+	// Estoque do dia 1 = abertura do mês; o final é a abertura do mês seguinte.
+	const estoqueInicial = obterEstoqueAbertura(fontes.estoques, mesAno);
+	const estoqueFinal = obterEstoqueAbertura(
+		fontes.estoques,
+		obterMesAnoSeguinte(mesAno),
+	);
+	const saude = calcularSaudeFinanceira({
+		faturamento: totais.receitas,
+		revendaPaga: totais.revenda,
+		compras: totais.compras,
+		variaveis: totais.variaveis,
+		fixas: totais.fixas,
+		estoqueInicial,
+		estoqueFinal,
+		diasNoPeriodo: diasNoMes(mesAno),
+	});
+
+	return {
+		mesAno,
+		listas: { receitas, compras, despesas, revenda, variaveis, fixas },
+		totais,
+		estoqueInicial,
+		saude,
+	};
+}
+
+/** Os 12 meses terminando em `fim` (inclusive), do mais antigo ao mais novo. */
+function ultimos12Meses(fim: MesAno) {
+	const meses: MesAno[] = [fim];
+	while (meses.length < 12) meses.unshift(obterMesAnoAnterior(meses[0]));
+	return meses;
+}
+
+/** De que mês vem o número que depende de CMV, quando não é o selecionado. */
+function descreverMesCmv(mesCmv: MesAno, selecionado: MesAno) {
+	return mesCmv.mes === selecionado.mes && mesCmv.ano === selecionado.ano
+		? "mês fechado"
+		: `último mês fechado: ${formatarMesCurto(mesCmv)}`;
+}
+
+function formatarMesCurto({ mes, ano }: MesAno) {
+	const nome = new Date(Date.UTC(ano, mes - 1, 1)).toLocaleDateString("pt-BR", {
+		month: "short",
+		timeZone: "UTC",
+	});
+	return `${nome.replace(".", "")}/${String(ano).slice(2)}`;
 }
 
 function formatarChaveData(value: Date | string | null) {
@@ -282,7 +390,33 @@ export async function loader() {
 		mesAno,
 		opcoesMesAno,
 		estoques,
+		contasAPagar: resumirContasAPagar(await getContasAPagar()),
 	};
+}
+
+/**
+ * Posição de HOJE dos boletos em aberto (não depende do mês selecionado):
+ * o que já venceu e o que vence nos próximos 7 dias. É o que ainda vai sair
+ * do lucro de caixa quando for pago.
+ */
+function resumirContasAPagar(abertas: ItemComDataValor[]) {
+	const hoje = obterHojeDataCivilUTC().getTime();
+	const daquiA7Dias = hoje + 7 * 24 * 60 * 60 * 1000;
+	const resumo = { total: 0, quantidade: 0, vencido: 0, quantidadeVencida: 0, proximos7Dias: 0 };
+	for (const conta of abertas) {
+		const valor = Number(conta.valor || 0);
+		const data = toDate(conta.data)?.getTime();
+		resumo.total += valor;
+		resumo.quantidade += 1;
+		if (data == null) continue;
+		if (data < hoje) {
+			resumo.vencido += valor;
+			resumo.quantidadeVencida += 1;
+		} else if (data < daquiA7Dias) {
+			resumo.proximos7Dias += valor;
+		}
+	}
+	return resumo;
 }
 export default function Home({ loaderData }: Route.ComponentProps) {
 	const chartConfig = {
@@ -313,223 +447,79 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		despesasPagas,
 		mesAno,
 		estoques,
+		contasAPagar,
 	} = loaderData;
 	const mesAnoContext = useMesAnoContext();
 	const mesAnoSelecionado = mesAnoContext?.mesAno ?? mesAno;
 	const [chartMode, setChartMode] = useState<ChartMode>("acumulado");
 
-	const receitasFiltradas = useMemo(
+	/** Os 12 meses até o selecionado; o último é o próprio mês selecionado. */
+	const tendencia = useMemo(
 		() =>
-			filtrarPorMesAno(receitas, mesAnoSelecionado.mes, mesAnoSelecionado.ano),
-		[receitas, mesAnoSelecionado.mes, mesAnoSelecionado.ano],
-	);
-	const comprasFiltradas = useMemo(
-		() =>
-			filtrarPorMesAno(compras, mesAnoSelecionado.mes, mesAnoSelecionado.ano),
-		[compras, mesAnoSelecionado.mes, mesAnoSelecionado.ano],
-	);
-	const despesasFiltradas = useMemo(
-		() =>
-			filtrarPorMesAno(
-				despesasPagas,
-				mesAnoSelecionado.mes,
-				mesAnoSelecionado.ano,
+			ultimos12Meses(mesAnoSelecionado).map((m) =>
+				resumirMes({ receitas, compras, despesasPagas, estoques }, m),
 			),
-		[despesasPagas, mesAnoSelecionado.mes, mesAnoSelecionado.ano],
+		[receitas, compras, despesasPagas, estoques, mesAnoSelecionado.mes, mesAnoSelecionado.ano],
 	);
-	const mesAnoAnterior = useMemo(
-		() => obterMesAnoAnterior(mesAnoSelecionado),
-		[mesAnoSelecionado.mes, mesAnoSelecionado.ano],
-	);
-	const receitasAnteriorFiltradas = useMemo(
-		() => filtrarPorMesAno(receitas, mesAnoAnterior.mes, mesAnoAnterior.ano),
-		[receitas, mesAnoAnterior.mes, mesAnoAnterior.ano],
-	);
-	const comprasAnteriorFiltradas = useMemo(
-		() => filtrarPorMesAno(compras, mesAnoAnterior.mes, mesAnoAnterior.ano),
-		[compras, mesAnoAnterior.mes, mesAnoAnterior.ano],
-	);
-	const despesasAnteriorFiltradas = useMemo(
-		() =>
-			filtrarPorMesAno(despesasPagas, mesAnoAnterior.mes, mesAnoAnterior.ano),
-		[despesasPagas, mesAnoAnterior.mes, mesAnoAnterior.ano],
-	);
-	const despesasVariaveis = useMemo(
-		() => despesasFiltradas.filter((d) => ehDespesaVariavel(d.tipo)),
-		[despesasFiltradas],
-	);
+	const atual = tendencia[tendencia.length - 1];
+	const anterior = tendencia[tendencia.length - 2];
+	const { totais, saude: saudeFinanceira, estoqueInicial } = atual;
 	/**
-	 * Revenda paga = custo da mercadoria na visão de caixa (card Lucro Líquido).
-	 * Filtra pela conta em qualquer tipo, para não depender de como foi classificada.
+	 * Margem bruta e cobertura precisam de CMV. No mês em andamento ele ainda não
+	 * existe, então os cards mostram o último mês fechado — e dizem qual é.
 	 */
-	const despesasRevenda = useMemo(
-		() => despesasFiltradas.filter((d) => d.conta === "Revenda"),
-		[despesasFiltradas],
-	);
-	const despesasRevendaAnterior = useMemo(
-		() => despesasAnteriorFiltradas.filter((d) => d.conta === "Revenda"),
-		[despesasAnteriorFiltradas],
-	);
-	/**
-	 * Revenda sai das variáveis porque a mercadoria já entra como custo à parte
-	 * (Revenda paga no lucro líquido, CMV no lucro real).
-	 *
-	 * Tem que ser um filtro DENTRO das variáveis, nunca uma subtração do total de
-	 * Revenda: 155 despesas de Revenda estão gravadas como fixas, e subtraí-las de
-	 * uma soma onde elas nunca entraram derrubava as variáveis abaixo de zero
-	 * (jan/26 chegou a −R$ 7.106) e ainda as contava de novo dentro das fixas.
-	 */
-	const despesasVariaveisSemCompras = useMemo(
-		() => despesasVariaveis.filter((d) => d.conta !== "Revenda"),
-		[despesasVariaveis],
+	const ultimoMesComCmv = useMemo(
+		() => [...tendencia].reverse().find((r) => r.saude.cmv != null) ?? null,
+		[tendencia],
 	);
 
-	const despesasFixas = useMemo(
-		() => despesasFiltradas.filter((d) => ehDespesaFixa(d.tipo)),
-		[despesasFiltradas],
+	const variacaoTexto = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+	const variacaoReceitas = calcularVariacaoPercentual(
+		totais.receitas,
+		anterior.totais.receitas,
 	);
-	const despesasVariaveisAnterior = useMemo(
-		() => despesasAnteriorFiltradas.filter((d) => ehDespesaVariavel(d.tipo)),
-		[despesasAnteriorFiltradas],
+	const variacaoReceitasTexto = variacaoTexto(variacaoReceitas);
+	const variacaoCompras = calcularVariacaoPercentual(
+		totais.compras,
+		anterior.totais.compras,
 	);
-	const despesasVariaveisSemComprasAnterior = useMemo(
-		() => despesasVariaveisAnterior.filter((d) => d.conta !== "Revenda"),
-		[despesasVariaveisAnterior],
+	const variacaoComprasTexto = variacaoTexto(variacaoCompras);
+	const variacaoDespesas = calcularVariacaoPercentual(
+		totais.despesas,
+		anterior.totais.despesas,
 	);
-	const despesasFixasAnterior = useMemo(
-		() => despesasAnteriorFiltradas.filter((d) => ehDespesaFixa(d.tipo)),
-		[despesasAnteriorFiltradas],
+	const variacaoDespesasTexto = variacaoTexto(variacaoDespesas);
+	const variacaoLucroLiquido = calcularVariacaoPercentual(
+		saudeFinanceira.lucroLiquido,
+		anterior.saude.lucroLiquido,
 	);
-	const totais = useMemo(
-		() => ({
-			receitas: somarValores(receitasFiltradas),
-			receitasAnterior: somarValores(receitasAnteriorFiltradas),
-			compras: somarValores(comprasFiltradas),
-			comprasAnterior: somarValores(comprasAnteriorFiltradas),
-			despesas: somarValores(despesasFiltradas),
-			despesasAnterior: somarValores(despesasAnteriorFiltradas),
-			revenda: somarValores(despesasRevenda),
-			revendaAnterior: somarValores(despesasRevendaAnterior),
-			despesasVariaveis: somarValores(despesasVariaveisSemCompras),
-			despesasFixas: somarValores(despesasFixas),
-			despesasVariaveisAnterior: somarValores(
-				despesasVariaveisSemComprasAnterior,
-			),
-			despesasFixasAnterior: somarValores(despesasFixasAnterior),
-		}),
-		[
-			receitasFiltradas,
-			receitasAnteriorFiltradas,
-			comprasFiltradas,
-			comprasAnteriorFiltradas,
-			despesasFiltradas,
-			despesasAnteriorFiltradas,
-			despesasRevenda,
-			despesasRevendaAnterior,
-			despesasVariaveisSemCompras,
-			despesasFixas,
-			despesasVariaveisSemComprasAnterior,
-			despesasFixasAnterior,
-		],
-	);
-	const variacaoReceitas = useMemo(
-		() => calcularVariacaoPercentual(totais.receitas, totais.receitasAnterior),
-		[totais.receitas, totais.receitasAnterior],
-	);
-	const variacaoReceitasTexto = `${variacaoReceitas >= 0 ? "+" : ""}${variacaoReceitas.toFixed(1)}%`;
-	const variacaoCompras = useMemo(
-		() => calcularVariacaoPercentual(totais.compras, totais.comprasAnterior),
-		[totais.compras, totais.comprasAnterior],
-	);
-	const variacaoComprasTexto = `${variacaoCompras >= 0 ? "+" : ""}${variacaoCompras.toFixed(1)}%`;
-	const variacaoDespesas = useMemo(
-		() => calcularVariacaoPercentual(totais.despesas, totais.despesasAnterior),
-		[totais.despesas, totais.despesasAnterior],
-	);
-	const variacaoDespesasTexto = `${variacaoDespesas >= 0 ? "+" : ""}${variacaoDespesas.toFixed(1)}%`;
-	const lucroLiquidoAtual = useMemo(
-		() =>
-			calcularLucroLiquido(
-				totais.receitas,
-				totais.revenda,
-				totais.despesasVariaveis,
-				totais.despesasFixas,
-			),
-		[
-			totais.receitas,
-			totais.revenda,
-			totais.despesasVariaveis,
-			totais.despesasFixas,
-		],
-	);
-	const lucroLiquidoAnterior = useMemo(
-		() =>
-			calcularLucroLiquido(
-				totais.receitasAnterior,
-				totais.revendaAnterior,
-				totais.despesasVariaveisAnterior,
-				totais.despesasFixasAnterior,
-			),
-		[
-			totais.receitasAnterior,
-			totais.revendaAnterior,
-			totais.despesasVariaveisAnterior,
-			totais.despesasFixasAnterior,
-		],
-	);
-	const variacaoLucroLiquido = useMemo(
-		() => calcularVariacaoPercentual(lucroLiquidoAtual, lucroLiquidoAnterior),
-		[lucroLiquidoAtual, lucroLiquidoAnterior],
-	);
-	const variacaoLucroLiquidoTexto = `${variacaoLucroLiquido >= 0 ? "+" : ""}${variacaoLucroLiquido.toFixed(1)}%`;
+	const variacaoLucroLiquidoTexto = variacaoTexto(variacaoLucroLiquido);
 
-	// Estoque do dia 1 = abertura do mês; o final é a abertura do mês seguinte.
-	const estoqueInicial = obterEstoqueAbertura(estoques, mesAnoSelecionado);
-	const estoqueFinal = obterEstoqueAbertura(
-		estoques,
-		obterMesAnoSeguinte(mesAnoSelecionado),
-	);
-
-	const saudeFinanceira = calcularSaudeFinanceira({
-		faturamento: totais.receitas,
-		revendaPaga: totais.revenda,
-		compras: totais.compras,
-		variaveis: totais.despesasVariaveis,
-		fixas: totais.despesasFixas,
-		estoqueInicial,
-		estoqueFinal,
-	});
 	const chartData = useMemo(() => {
-		const dias = criarDiasMes(mesAnoSelecionado.mes, mesAnoSelecionado.ano);
-		const receitasMap = criarMapaDiario(receitasFiltradas);
-		const despesasMap = criarMapaDiario(despesasFiltradas);
-		const comprasMap = criarMapaDiario(comprasFiltradas);
-		const revendaMap = criarMapaDiario(despesasRevenda);
-		const variaveisMap = criarMapaDiario(despesasVariaveisSemCompras);
-		const fixasMap = criarMapaDiario(despesasFixas);
+		const { listas } = atual;
 		return criarSerieChart(
-			dias,
-			receitasMap,
-			despesasMap,
-			comprasMap,
-			revendaMap,
-			variaveisMap,
-			fixasMap,
-			saudeFinanceira.lucroLiquidoReal,
+			criarDiasMes(mesAnoSelecionado.mes, mesAnoSelecionado.ano),
+			criarMapaDiario(listas.receitas),
+			criarMapaDiario(listas.despesas),
+			criarMapaDiario(listas.compras),
+			criarMapaDiario(listas.revenda),
+			criarMapaDiario(listas.variaveis),
+			criarMapaDiario(listas.fixas),
+			atual.saude.lucroLiquidoReal,
 			chartMode,
 		);
-	}, [
-		receitasFiltradas,
-		despesasFiltradas,
-		comprasFiltradas,
-		despesasRevenda,
-		despesasVariaveisSemCompras,
-		despesasFixas,
-		mesAnoSelecionado.mes,
-		mesAnoSelecionado.ano,
-		saudeFinanceira.lucroLiquidoReal,
-		chartMode,
-	]);
+	}, [atual, chartMode]);
+
+	const tendenciaData = useMemo(
+		() =>
+			tendencia.map((r) => ({
+				mes: formatarMesCurto(r.mesAno),
+				receitas: r.totais.receitas,
+				lucroLiquido: r.saude.lucroLiquido,
+				lucroReal: r.saude.lucroLiquidoReal,
+			})),
+		[tendencia],
+	);
 
 	return (
 		<div className='container mt-4 mx-auto flex flex-col gap-4'>
@@ -662,6 +652,66 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						</CardDescription>
 					</CardFooter>
 				</Card>
+				<Card className='@container/card'>
+					<CardHeader>
+						<CardDescription>Margem bruta</CardDescription>
+						<CardTitle className='text-2xl  tabular-nums @[250px]/card:text-xl font-light font-mono'>
+							{ultimoMesComCmv?.saude.margemBruta != null
+								? formatarPercentual(ultimoMesComCmv.saude.margemBruta)
+								: "—"}
+						</CardTitle>
+					</CardHeader>
+					<CardFooter>
+						<CardDescription>
+							{ultimoMesComCmv
+								? `Markup ${ultimoMesComCmv.saude.markup != null ? `${ultimoMesComCmv.saude.markup.toFixed(2)}×` : "—"} · ${descreverMesCmv(ultimoMesComCmv.mesAno, mesAnoSelecionado)}`
+								: "Sem estoque para calcular o CMV"}
+						</CardDescription>
+					</CardFooter>
+				</Card>
+				<Card className='@container/card'>
+					<CardHeader>
+						<CardDescription>Cobertura de estoque</CardDescription>
+						<CardTitle className='text-2xl  tabular-nums @[250px]/card:text-xl font-light font-mono'>
+							{ultimoMesComCmv?.saude.coberturaEstoqueDias != null
+								? `${Math.round(ultimoMesComCmv.saude.coberturaEstoqueDias)} dias`
+								: "—"}
+						</CardTitle>
+					</CardHeader>
+					<CardFooter>
+						<CardDescription>
+							{ultimoMesComCmv
+								? `Estoque parado no ritmo de venda · ${descreverMesCmv(ultimoMesComCmv.mesAno, mesAnoSelecionado)}`
+								: "Sem estoque para calcular o CMV"}
+						</CardDescription>
+					</CardFooter>
+				</Card>
+				<Card className='@container/card'>
+					<CardHeader>
+						<CardDescription>
+							<Link to='/contas_a_pagar' className='hover:underline'>
+								Contas a pagar
+							</Link>
+						</CardDescription>
+						<CardTitle className='text-2xl  tabular-nums @[250px]/card:text-xl font-light font-mono'>
+							{formatCurrencyBRL(contasAPagar.total)}
+						</CardTitle>
+						{contasAPagar.vencido > 0 ? (
+							<CardAction>
+								<Badge variant='destructive' className='whitespace-nowrap text-xs'>
+									{formatCurrencyBRL(contasAPagar.vencido)} vencido
+								</Badge>
+							</CardAction>
+						) : null}
+					</CardHeader>
+					<CardFooter>
+						<CardDescription>
+							{contasAPagar.quantidade}{" "}
+							{contasAPagar.quantidade === 1 ? "boleto" : "boletos"} em aberto ·{" "}
+							{formatCurrencyBRL(contasAPagar.proximos7Dias)} nos próximos 7 dias
+						</CardDescription>
+					</CardFooter>
+				</Card>
 			</div>
 			<Card className='pt-0'>
 				<CardHeader className='flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row'>
@@ -752,6 +802,59 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								stroke='var(--color-lucroReal)'
 								strokeWidth={2}
 								dot={false}
+							/>
+							<ChartLegend content={<ChartLegendContent />} />
+						</LineChart>
+					</ChartContainer>
+				</CardContent>
+			</Card>
+			<Card className='pt-0'>
+				<CardHeader className='border-b py-5'>
+					<CardTitle>Últimos 12 meses</CardTitle>
+					<CardDescription>
+						Receitas, lucro líquido (caixa) e lucro real (CMV) — o lucro real só
+						aparece nos meses com estoque de fechamento
+					</CardDescription>
+				</CardHeader>
+				<CardContent className='px-2 pt-4 sm:px-6 sm:pt-6'>
+					<ChartContainer
+						config={chartConfig}
+						className='aspect-auto h-[250px] w-full'>
+						<LineChart
+							accessibilityLayer
+							data={tendenciaData}
+							margin={{ left: 12, right: 12 }}>
+							<CartesianGrid vertical={false} />
+							<XAxis
+								dataKey='mes'
+								tickLine={false}
+								axisLine={false}
+								tickMargin={8}
+							/>
+							<ChartTooltip
+								cursor={false}
+								content={<ChartTooltipContent indicator='dot' />}
+							/>
+							<Line
+								dataKey='receitas'
+								type='monotone'
+								stroke='var(--color-receitas)'
+								strokeWidth={2}
+								dot
+							/>
+							<Line
+								dataKey='lucroLiquido'
+								type='monotone'
+								stroke='var(--color-lucroLiquido)'
+								strokeWidth={2}
+								dot
+							/>
+							<Line
+								dataKey='lucroReal'
+								type='monotone'
+								stroke='var(--color-lucroReal)'
+								strokeWidth={2}
+								dot
 							/>
 							<ChartLegend content={<ChartLegendContent />} />
 						</LineChart>

@@ -209,6 +209,25 @@ Enquanto o estoque do dia 1 do mês seguinte não for lançado (mês em andament
 
 ---
 
+## 13a. Margem bruta, markup e cobertura de estoque
+
+Dependem do CMV (ver § 12), então só existem em mês fechado. No mês em andamento, os cards mostram o **último mês fechado** e dizem qual é ("último mês fechado: ago/26").
+
+```
+margemBruta = (faturamento - cmv) / faturamento * 100
+markup = faturamento / cmv
+coberturaEstoqueDias = ((estoqueInicial + estoqueFinal) / 2) / cmv * diasNoMes
+```
+
+- **Margem bruta / markup**: se o preço cobre o custo da mercadoria, antes de qualquer despesa. Comparável ao markup da Calculadora de Preço.
+- **Cobertura**: quantos dias de venda o estoque aguenta no ritmo do mês — quanto dinheiro está parado em mercadoria.
+
+## 13b. Contas a pagar (card)
+
+Posição de **hoje**, independente do mês selecionado: total dos boletos em aberto desde 2025 (`getContasAPagar`), o que já venceu (badge vermelha) e o que vence nos próximos 7 dias. É o que ainda vai sair do lucro de caixa quando for pago. O título leva à página Contas a Pagar, que filtra **Em aberto / Pagos** (pagos = com boleto anexado).
+
+---
+
 ## 14. Gráfico (“Receitas, Despesas e Compras”)
 
 ### Conceito
@@ -227,11 +246,17 @@ Identificar **concentração** de receita/despesa no mês e se o lucro acumulado
 
 ---
 
+## 14a. Últimos 12 meses
+
+Receitas, lucro líquido e lucro real mês a mês, terminando no mês selecionado. Cada ponto é calculado por `resumirMes` — a mesma função dos cards e do mês anterior, para os números nunca divergirem. O lucro real fica vazio nos meses sem estoque de fechamento.
+
+---
+
 ## 15. O que a home **não** mostra (mas o código permite derivar)
 
 ### Lucro bruto (conceito)
 
-**Receitas − CMV** (custo só da mercadoria vendida), **antes** de despesas operacionais variáveis e fixas. O app calcula `cmv` em `saudeFinanceira` mas **não** expõe um card “Lucro bruto”.
+**Receitas − CMV** (custo só da mercadoria vendida), **antes** de despesas operacionais variáveis e fixas. A home mostra essa ideia em percentual no card **Margem bruta** (§ 13a), não em R$.
 
 ### Receitas − Despesas (card único)
 

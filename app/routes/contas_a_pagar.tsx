@@ -5,11 +5,14 @@ import { ContaAPagarSelectionDialog } from "~/components/conta-a-pagar-selection
 import {
 	createContaAPagar,
 	getContasAPagar,
+	type FiltroContasAPagar,
+	type StatusContasAPagar,
 	updateDespesaPartial,
 	deleteDespesa,
 } from "~/models/despesas.server";
 import { uploadReciboAndGetUrl } from "~/models/pocketbase.server";
 import { jsonFieldUploadError } from "~/lib/upload-errors";
+import { formatCurrencyBRL } from "~/lib/formatters";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Plus } from "lucide-react";
@@ -85,6 +88,8 @@ const formSchema = z.object({
 });
 
 export async function action({ request }: Route.ActionArgs) {
+	// Volta para a mesma lista (filtros de status/dia) depois de salvar
+	const voltarParaLista = `/contas_a_pagar${new URL(request.url).search}`;
 	const formData = await request.formData();
 	const intent = formData.get("intent");
 
@@ -93,7 +98,7 @@ export async function action({ request }: Route.ActionArgs) {
 		if (typeof id === "string") {
 			await deleteDespesa(id);
 		}
-		throw redirect("/contas_a_pagar");
+		throw redirect(voltarParaLista);
 	}
 
 	if (intent === "edit") {
@@ -131,7 +136,7 @@ export async function action({ request }: Route.ActionArgs) {
 			...(data && { data }),
 			...(comprovanteUrl && { comprovante: comprovanteUrl }),
 		});
-		throw redirect("/contas_a_pagar");
+		throw redirect(voltarParaLista);
 	}
 
 	// Create (sem intent)
@@ -180,26 +185,37 @@ export async function action({ request }: Route.ActionArgs) {
 			{ status: 500 },
 		);
 	}
-	throw redirect("/contas_a_pagar");
+	throw redirect(voltarParaLista);
 }
 
 /** Carrega as contas a pagar */
 export async function loader({ request }: Route.LoaderArgs) {
 	const url = new URL(request.url);
-	const filtro = (url.searchParams.get("filtro") ?? "todas") as
-		| "hoje"
-		| "todas";
-	const contasAPagar = await getContasAPagar({ filtro });
+	const filtro: FiltroContasAPagar =
+		url.searchParams.get("filtro") === "hoje" ? "hoje" : "todas";
+	const status: StatusContasAPagar =
+		url.searchParams.get("status") === "pagos" ? "pagos" : "abertos";
+	const contasAPagar = await getContasAPagar({ filtro, status });
 	const getTimestampOrdenacao = (data: Date | null) =>
 		data ? new Date(data).getTime() : Number.POSITIVE_INFINITY;
+	// Abertos: o próximo vencimento primeiro. Pagos: o mais recente primeiro.
+	const sentido = status === "pagos" ? -1 : 1;
 	const contasAPagarOrdenadas = [...contasAPagar].sort(
-		(a, b) => getTimestampOrdenacao(a.data) - getTimestampOrdenacao(b.data),
+		(a, b) =>
+			sentido * (getTimestampOrdenacao(a.data) - getTimestampOrdenacao(b.data)),
 	);
+	const total = contasAPagar.reduce((soma, c) => soma + Number(c.valor || 0), 0);
 	const fornecedores = await getFornecedores();
-	return { contasAPagar: contasAPagarOrdenadas, fornecedores, filtro };
+	return {
+		contasAPagar: contasAPagarOrdenadas,
+		fornecedores,
+		filtro,
+		status,
+		total,
+	};
 }
 export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
-	const { contasAPagar, fornecedores, filtro } = loaderData;
+	const { contasAPagar, fornecedores, filtro, status, total } = loaderData;
 	const [searchParams, setSearchParams] = useSearchParams();
 	const fetcher = useFetcher<{ errors?: Record<string, string[]> }>();
 	const busy = fetcher.state !== "idle";
@@ -210,8 +226,11 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const submittedRef = useRef(false);
 
-	function handleFiltroChange(value: string) {
-		setSearchParams(value === "hoje" ? { filtro: "hoje" } : {});
+	function atualizarParametro(nome: string, valor: string, padrao: string) {
+		const params = new URLSearchParams(searchParams);
+		if (valor === padrao) params.delete(nome);
+		else params.set(nome, valor);
+		setSearchParams(params);
 	}
 
 	useEffect(() => {
@@ -233,17 +252,34 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 	return (
 		<div className='container mx-auto'>
 			<div className='mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
-				<div className='flex items-center gap-4'>
+				<div className='flex flex-wrap items-center gap-4'>
 					<h1 className='text-2xl font-bold'>Contas a Pagar</h1>
-					<Select value={filtro} onValueChange={handleFiltroChange}>
+					<Select
+						value={status}
+						onValueChange={(v) => atualizarParametro("status", v, "abertos")}>
 						<SelectTrigger className='w-[140px]'>
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value='hoje'>Hoje</SelectItem>
-							<SelectItem value='todas'>Todas</SelectItem>
+							<SelectItem value='abertos'>Em aberto</SelectItem>
+							<SelectItem value='pagos'>Pagos</SelectItem>
 						</SelectContent>
 					</Select>
+					<Select
+						value={filtro}
+						onValueChange={(v) => atualizarParametro("filtro", v, "todas")}>
+						<SelectTrigger className='w-[140px]'>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value='hoje'>Vence hoje</SelectItem>
+							<SelectItem value='todas'>Todas as datas</SelectItem>
+						</SelectContent>
+					</Select>
+					<span className='text-sm text-muted-foreground tabular-nums'>
+						{contasAPagar.length} {contasAPagar.length === 1 ? "boleto" : "boletos"} ·{" "}
+						{formatCurrencyBRL(total)}
+					</span>
 				</div>
 				<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
 					<DialogTrigger asChild>

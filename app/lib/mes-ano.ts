@@ -37,6 +37,16 @@ export function obterMesAnoAtual(): MesAno {
 	return { mes, ano };
 }
 
+/**
+ * Hoje no Brasil como dia civil em UTC meia-noite — o mesmo formato do campo
+ * `data` gravado pelo `<input type="date">`, para comparar direto com ele.
+ */
+export function obterHojeDataCivilUTC(): Date {
+	const hoje = new Date().toLocaleDateString("en-CA", { timeZone: TZ_BR }); // YYYY-MM-DD
+	const [y, m, d] = hoje.split("-").map(Number);
+	return new Date(Date.UTC(y, m - 1, d));
+}
+
 export function obterMesAnoAnterior({ mes, ano }: MesAno): MesAno {
 	if (mes === 1) {
 		return { mes: 12, ano: ano - 1 };

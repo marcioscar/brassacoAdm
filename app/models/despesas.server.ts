@@ -1,5 +1,6 @@
 import { db } from "~/db.server";
 import { z } from "zod";
+import { obterHojeDataCivilUTC } from "~/lib/mes-ano";
 
 const formSchema = z.object({
 	conta: z.string().min(1),
@@ -33,27 +34,40 @@ export async function getDespesas() {
 
 const INICIO_2025 = new Date("2025-01-01");
 
-export async function getContasAPagar(options?: { filtro?: "hoje" | "todas" }) {
+export type FiltroContasAPagar = "hoje" | "todas";
+export type StatusContasAPagar = "abertos" | "pagos";
+
+/**
+ * Contas a pagar desde 2025. `abertos` = não pagas; `pagos` = pagas que têm
+ * boleto anexado, isto é, as que passaram por esta tela — sem o boleto a lista
+ * viraria a de todas as despesas pagas, que já é a página Despesas.
+ * O filtro `hoje` olha a data de vencimento (`data`).
+ */
+export async function getContasAPagar(options?: {
+	filtro?: FiltroContasAPagar;
+	status?: StatusContasAPagar;
+}) {
 	const filtro = options?.filtro ?? "todas";
+	const status = options?.status ?? "abertos";
 
-	const where: { pago: boolean; data: { gte: Date; lt?: Date } | { gte: Date } } = {
-		pago: false,
-		data: { gte: INICIO_2025 },
-	};
-
+	let data: { gte: Date; lt?: Date } = { gte: INICIO_2025 };
 	if (filtro === "hoje") {
-		// Datas no BD são UTC midnight. "Hoje" = data atual no fuso Brasil
-		const now = new Date();
-		const brDate = now.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }); // YYYY-MM-DD
-		const [y, m, d] = brDate.split("-").map(Number);
-		const hojeStart = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
-		const amanha = new Date(hojeStart);
+		const hoje = obterHojeDataCivilUTC();
+		const amanha = new Date(hoje);
 		amanha.setUTCDate(amanha.getUTCDate() + 1);
-		where.data = { gte: hojeStart, lt: amanha };
+		data = { gte: hoje, lt: amanha };
 	}
 
 	return db.despesas.findMany({
-		where,
+		where:
+			status === "pagos"
+				? {
+						pago: true,
+						data,
+						boleto: { isSet: true },
+						NOT: [{ boleto: null }, { boleto: "" }],
+					}
+				: { pago: false, data },
 		orderBy: { data: "desc" },
 	});
 }
