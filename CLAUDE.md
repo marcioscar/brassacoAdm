@@ -60,11 +60,12 @@ All dates are stored as **UTC midnight** (from `<input type="date">` → e.g. `2
 
 ### Financial KPIs (home dashboard)
 
-All logic is in `app/utils/financeiro.ts → calcularSaudeFinanceira`. Key rule: **Compras NF** (the `compras` model) is the cost-of-goods proxy. Despesas variáveis with `conta === "Revenda"` are **excluded** from the variáveis sum to avoid double-counting mercadoria costs. See `docs/metricas-home.md` for full explanation of every metric.
+All logic is in `app/utils/financeiro.ts → calcularSaudeFinanceira`. Mercadoria is counted **once** per metric, never twice: despesas with `conta === "Revenda"` are the paid merchandise, and are excluded from the "variáveis" sum. See `docs/metricas-home.md` for full explanation of every metric.
 
-- **Lucro líquido** = Receitas − Compras NF − Variáveis (excl. Revenda) − Fixas
-- **Lucro real** = same but replacing Compras NF with CMV (estoque anterior + compras − estoque atual)
-- **Ponto de equilíbrio** = Fixas / (Margem RS / Faturamento)
+- **Lucro líquido** (cash view) = Receitas − Revenda paga − Variáveis (excl. Revenda) − Fixas
+- **Lucro real** = Receitas − CMV − Variáveis (excl. Revenda) − Fixas, with **CMV = estoque inicial + Compras NF − estoque final**. CMV must use Compras NF (stock is valued at invoice cost), never Revenda.
+- **Estoque**: the `estoque` record dated day 1 of a month (`local: "todas"`) is that month's **opening** stock; the closing stock is the next month's day-1 record. While it doesn't exist, lucro real is `null` ("aguardando").
+- **Ponto de equilíbrio** = Fixas / margem %, using the **CMV** margin; falls back to the cash margin only when CMV is unavailable (`baseEquilibrio`). `status` follows the same rule (lucro real, else lucro líquido).
 
 ### File uploads
 

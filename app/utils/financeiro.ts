@@ -78,55 +78,86 @@ export function verificarPrecoVenda(params: {
 }
 
 /**
- * Custos variáveis alinhados aos cards da home:
- * - `compras` = módulo Compras (NF / mercadoria)
- * - `variaveis` = despesas variáveis já sem duplicar a conta Revenda (vem de `totais.despesasVariaveis`)
+ * KPIs da home. Duas visões do custo da mercadoria, cada uma com seu papel:
  *
- * Antes a margem usava só Revenda nas despesas e ignorava as Compras (NF), distorcendo ponto de equilíbrio e lucro
- * em relação ao que o operador vê em Receitas / Compras.
+ * - Lucro líquido usa a `revendaPaga` (despesas pagas na conta Revenda): é o
+ *   que de fato saiu do caixa para pagar mercadoria no mês. As Compras NF não
+ *   entram aqui — a data da nota não é nem o pagamento nem a venda.
+ * - Lucro real usa o CMV, que TEM que ser montado com as `compras` (NF): o
+ *   estoque é valorizado pelo custo das notas, então só a NF fecha a conta
+ *   estoque inicial + compras − estoque final.
+ *
+ * O estoque lançado no dia 1 de cada mês é o de ABERTURA daquele mês. Então o
+ * estoque final de um mês é o do dia 1 do mês seguinte — e enquanto ele não
+ * existe (mês em andamento) não há CMV: os campos "real" voltam `null` em vez
+ * de um número montado com o estoque errado.
+ *
+ * Ponto de equilíbrio e status seguem a margem do CMV, que mede o que a venda
+ * deixa de verdade; a margem de caixa oscila com o calendário de pagamento da
+ * mercadoria. Só no mês em andamento (sem CMV) caem na base de caixa, e
+ * `baseEquilibrio` diz qual foi usada.
+ *
+ * `variaveis` são as despesas variáveis SEM a conta Revenda (impostos,
+ * comissões…), para a mercadoria não entrar duas vezes.
  */
 export function calcularSaudeFinanceira(dados: {
 	faturamento: number;
+	revendaPaga: number;
 	compras: number;
 	variaveis: number;
 	fixas: number;
-	estoqueAtual: number;
-	estoqueAnterior: number;
+	estoqueInicial: number | null;
+	estoqueFinal: number | null;
 }) {
-	const { faturamento, compras, variaveis, fixas, estoqueAtual, estoqueAnterior } =
-		dados;
+	const {
+		faturamento,
+		revendaPaga,
+		compras,
+		variaveis,
+		fixas,
+		estoqueInicial,
+		estoqueFinal,
+	} = dados;
+	const sobreFaturamento = (valor: number) =>
+		faturamento > 0 ? (valor / faturamento) * 100 : 0;
 
-	// 1. Margem de contribuição (Receitas − Compras NF − outras variáveis)
-	const margemRS = faturamento - (compras + variaveis);
-	const margemPerc = faturamento > 0 ? margemRS / faturamento : 0;
+	// 1. Margem de contribuição (Receitas − Revenda paga − outras variáveis)
+	const margemRS = faturamento - (revendaPaga + variaveis);
+	const margemPerc = sobreFaturamento(margemRS);
 
-	// 2. Ponto de equilíbrio (faturamento necessário para cobrir fixas, na mesma base da margem)
-	const pontoEquilibrio = margemPerc > 0 ? fixas / margemPerc : 0;
-
-	// 3. Lucro líquido (mesma composição de custos variáveis da margem)
+	// 2. Lucro líquido (mesma composição de custos variáveis da margem)
 	const lucro = margemRS - fixas;
-	const lucratividade = faturamento > 0 ? (lucro / faturamento) * 100 : 0;
 
-	// Métricas com CMV (estoque + compras NF − estoque)
-	const cmv = estoqueAnterior + compras - estoqueAtual;
-	const margemRSReal = faturamento - (cmv + variaveis);
+	// Métricas com CMV (estoque inicial + compras NF − estoque final)
+	const cmv =
+		estoqueInicial != null && estoqueFinal != null
+			? estoqueInicial + compras - estoqueFinal
+			: null;
+	const margemRSReal = cmv != null ? faturamento - (cmv + variaveis) : null;
+	const lucroReal = margemRSReal != null ? margemRSReal - fixas : null;
 	const margemPercReal =
-		faturamento > 0 ? margemRSReal / faturamento : 0;
-	const lucroReal = margemRSReal - fixas;
-	const lucratividadeReal =
-		faturamento > 0 ? (lucroReal / faturamento) * 100 : 0;
+		margemRSReal != null ? sobreFaturamento(margemRSReal) : null;
+
+	// Ponto de equilíbrio (faturamento necessário para cobrir fixas) e status
+	const baseEquilibrio = margemPercReal != null ? "cmv" : "caixa";
+	const margemEquilibrio = margemPercReal ?? margemPerc;
+	const pontoEquilibrio =
+		margemEquilibrio > 0 ? fixas / (margemEquilibrio / 100) : 0;
+	const lucroStatus = lucroReal ?? lucro;
 
 	return {
 		margemContribuicao: margemRS,
-		margemContribuicaoPerc: margemPerc.toFixed(2),
+		margemContribuicaoPerc: margemPerc,
 		pontoEquilibrio,
+		baseEquilibrio,
+		margemEquilibrio,
 		lucroLiquido: lucro,
-		lucratividade,
+		lucratividade: sobreFaturamento(lucro),
 		cmv,
 		margemRSReal,
-		margemPercReal: margemPercReal.toFixed(2),
+		margemPercReal,
 		lucroLiquidoReal: lucroReal,
-		lucratividadeReal,
-		status: lucro > 0 ? "LUCRO" : "PREJUÍZO",
+		lucratividadeReal: lucroReal != null ? sobreFaturamento(lucroReal) : null,
+		status: lucroStatus > 0 ? "LUCRO" : "PREJUÍZO",
 	};
 }

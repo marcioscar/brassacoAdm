@@ -39,7 +39,7 @@ import {
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { TrendingUp, TrendingDown } from "lucide-react";
-import { getEstoqueMesAnterior, getEstoqueMesAtual } from "~/models/estoque";
+import { getEstoques } from "~/models/estoque";
 import React from "react";
 
 //grafico de area
@@ -72,6 +72,35 @@ function somarValores(itens: ItemComDataValor[]) {
 	return itens.reduce((total, item) => total + Number(item.valor || 0), 0);
 }
 
+type LancamentoEstoque = {
+	data: Date | string | null;
+	valor: number | null;
+	local?: string | null;
+};
+
+/**
+ * Estoque de ABERTURA do mês (o lançado no dia 1). Usa o total `todas`; nos
+ * meses antigos que também têm uma linha por loja, as lojas ficam de fora para
+ * não somar duas vezes. Sem `todas`, soma as lojas. Sem nada, `null`.
+ */
+function obterEstoqueAbertura(
+	estoques: LancamentoEstoque[],
+	{ mes, ano }: MesAno,
+) {
+	const doMes = estoques.filter((e) => isMesmoMesAnoDataCivilUTC(e.data, mes, ano));
+	if (doMes.length === 0) return null;
+	const total = doMes.filter((e) => e.local === "todas");
+	return somarValores(total.length > 0 ? total : doMes);
+}
+
+function obterMesAnoSeguinte({ mes, ano }: MesAno): MesAno {
+	return mes === 12 ? { mes: 1, ano: ano + 1 } : { mes: mes + 1, ano };
+}
+
+function formatarPercentual(valor: number) {
+	return `${valor.toFixed(2)}%`;
+}
+
 /**
  * Base de TODOS os números de despesa da home: só o que foi pago, e sem as
  * transferências entre lojas, que não são despesa (ver `ehTransferenciaEntreLojas`).
@@ -96,11 +125,11 @@ function calcularVariacaoPercentual(atual: number, anterior: number) {
 
 function calcularLucroLiquido(
 	faturamento: number,
-	compras: number,
+	revendaPaga: number,
 	variaveis: number,
 	fixas: number,
 ) {
-	const margemRS = faturamento - (compras + variaveis);
+	const margemRS = faturamento - (revendaPaga + variaveis);
 	return margemRS - fixas;
 }
 
@@ -149,9 +178,10 @@ function criarSerieChart(
 	receitasMap: Map<string, number>,
 	despesasMap: Map<string, number>,
 	comprasMap: Map<string, number>,
+	revendaMap: Map<string, number>,
 	variaveisMap: Map<string, number>,
 	fixasMap: Map<string, number>,
-	lucroRealMensal: number,
+	lucroRealMensal: number | null,
 	modo: ChartMode,
 ) {
 	let receitasAcumuladas = 0;
@@ -165,10 +195,10 @@ function criarSerieChart(
 		const comprasDia = comprasMap.get(dia) ?? 0;
 		const variaveisDia = variaveisMap.get(dia) ?? 0;
 		const fixasDia = fixasMap.get(dia) ?? 0;
-		// Mesma base do card: Compras (NF) + variáveis sem Revenda + fixas
+		// Mesma base do card: Revenda paga + variáveis sem Revenda + fixas
 		const lucroLiquidoDia = calcularLucroLiquido(
 			receitasDia,
-			comprasDia,
+			revendaMap.get(dia) ?? 0,
 			variaveisDia,
 			fixasDia,
 		);
@@ -237,8 +267,7 @@ export async function loader() {
 	const despesas = await getDespesas();
 	const despesasPagas = filtrarDespesasPagas(despesas);
 	const mesAno = obterMesAnoAtual();
-	const estoqueAtual = await getEstoqueMesAtual();
-	const estoqueAnterior = await getEstoqueMesAnterior();
+	const estoques = await getEstoques();
 	const opcoesMesAno = criarOpcoesMesAno(
 		receitas,
 		compras,
@@ -252,8 +281,7 @@ export async function loader() {
 		despesasPagas,
 		mesAno,
 		opcoesMesAno,
-		estoqueAtual,
-		estoqueAnterior,
+		estoques,
 	};
 }
 export default function Home({ loaderData }: Route.ComponentProps) {
@@ -284,8 +312,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		compras,
 		despesasPagas,
 		mesAno,
-		estoqueAtual,
-		estoqueAnterior,
+		estoques,
 	} = loaderData;
 	const mesAnoContext = useMesAnoContext();
 	const mesAnoSelecionado = mesAnoContext?.mesAno ?? mesAno;
@@ -332,7 +359,20 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		[despesasFiltradas],
 	);
 	/**
-	 * Revenda sai das variáveis porque a mercadoria já entra pelo card Compras (NF).
+	 * Revenda paga = custo da mercadoria na visão de caixa (card Lucro Líquido).
+	 * Filtra pela conta em qualquer tipo, para não depender de como foi classificada.
+	 */
+	const despesasRevenda = useMemo(
+		() => despesasFiltradas.filter((d) => d.conta === "Revenda"),
+		[despesasFiltradas],
+	);
+	const despesasRevendaAnterior = useMemo(
+		() => despesasAnteriorFiltradas.filter((d) => d.conta === "Revenda"),
+		[despesasAnteriorFiltradas],
+	);
+	/**
+	 * Revenda sai das variáveis porque a mercadoria já entra como custo à parte
+	 * (Revenda paga no lucro líquido, CMV no lucro real).
 	 *
 	 * Tem que ser um filtro DENTRO das variáveis, nunca uma subtração do total de
 	 * Revenda: 155 despesas de Revenda estão gravadas como fixas, e subtraí-las de
@@ -368,6 +408,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			comprasAnterior: somarValores(comprasAnteriorFiltradas),
 			despesas: somarValores(despesasFiltradas),
 			despesasAnterior: somarValores(despesasAnteriorFiltradas),
+			revenda: somarValores(despesasRevenda),
+			revendaAnterior: somarValores(despesasRevendaAnterior),
 			despesasVariaveis: somarValores(despesasVariaveisSemCompras),
 			despesasFixas: somarValores(despesasFixas),
 			despesasVariaveisAnterior: somarValores(
@@ -382,6 +424,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			comprasAnteriorFiltradas,
 			despesasFiltradas,
 			despesasAnteriorFiltradas,
+			despesasRevenda,
+			despesasRevendaAnterior,
 			despesasVariaveisSemCompras,
 			despesasFixas,
 			despesasVariaveisSemComprasAnterior,
@@ -407,13 +451,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		() =>
 			calcularLucroLiquido(
 				totais.receitas,
-				totais.compras,
+				totais.revenda,
 				totais.despesasVariaveis,
 				totais.despesasFixas,
 			),
 		[
 			totais.receitas,
-			totais.compras,
+			totais.revenda,
 			totais.despesasVariaveis,
 			totais.despesasFixas,
 		],
@@ -422,13 +466,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		() =>
 			calcularLucroLiquido(
 				totais.receitasAnterior,
-				totais.comprasAnterior,
+				totais.revendaAnterior,
 				totais.despesasVariaveisAnterior,
 				totais.despesasFixasAnterior,
 			),
 		[
 			totais.receitasAnterior,
-			totais.comprasAnterior,
+			totais.revendaAnterior,
 			totais.despesasVariaveisAnterior,
 			totais.despesasFixasAnterior,
 		],
@@ -439,29 +483,28 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 	);
 	const variacaoLucroLiquidoTexto = `${variacaoLucroLiquido >= 0 ? "+" : ""}${variacaoLucroLiquido.toFixed(1)}%`;
 
-	const estoqueAtualTotal = estoqueAtual[0]?.valor ?? 0;
-	const estoqueAnteriorTotal = estoqueAnterior[0]?.valor ?? 0;
+	// Estoque do dia 1 = abertura do mês; o final é a abertura do mês seguinte.
+	const estoqueInicial = obterEstoqueAbertura(estoques, mesAnoSelecionado);
+	const estoqueFinal = obterEstoqueAbertura(
+		estoques,
+		obterMesAnoSeguinte(mesAnoSelecionado),
+	);
 
-	const dadosFinanceiros = {
+	const saudeFinanceira = calcularSaudeFinanceira({
 		faturamento: totais.receitas,
+		revendaPaga: totais.revenda,
 		compras: totais.compras,
 		variaveis: totais.despesasVariaveis,
 		fixas: totais.despesasFixas,
-	};
-
-	const saudeFinanceira = calcularSaudeFinanceira({
-		faturamento: dadosFinanceiros.faturamento,
-		compras: dadosFinanceiros.compras,
-		variaveis: dadosFinanceiros.variaveis,
-		fixas: dadosFinanceiros.fixas,
-		estoqueAtual: estoqueAtualTotal,
-		estoqueAnterior: estoqueAnteriorTotal,
+		estoqueInicial,
+		estoqueFinal,
 	});
 	const chartData = useMemo(() => {
 		const dias = criarDiasMes(mesAnoSelecionado.mes, mesAnoSelecionado.ano);
 		const receitasMap = criarMapaDiario(receitasFiltradas);
 		const despesasMap = criarMapaDiario(despesasFiltradas);
 		const comprasMap = criarMapaDiario(comprasFiltradas);
+		const revendaMap = criarMapaDiario(despesasRevenda);
 		const variaveisMap = criarMapaDiario(despesasVariaveisSemCompras);
 		const fixasMap = criarMapaDiario(despesasFixas);
 		return criarSerieChart(
@@ -469,6 +512,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			receitasMap,
 			despesasMap,
 			comprasMap,
+			revendaMap,
 			variaveisMap,
 			fixasMap,
 			saudeFinanceira.lucroLiquidoReal,
@@ -478,6 +522,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		receitasFiltradas,
 		despesasFiltradas,
 		comprasFiltradas,
+		despesasRevenda,
 		despesasVariaveisSemCompras,
 		despesasFixas,
 		mesAnoSelecionado.mes,
@@ -574,7 +619,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					</CardHeader>
 					<CardFooter>
 						<CardDescription>
-							Lucratividade: {saudeFinanceira.lucratividade.toFixed(2)}%
+							Lucratividade:{" "}
+							{formatarPercentual(saudeFinanceira.lucratividade)} · mercadoria
+							pela Revenda paga
 						</CardDescription>
 					</CardFooter>
 				</Card>
@@ -582,14 +629,19 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					<CardHeader>
 						<CardDescription className=''>Lucro real</CardDescription>
 						<CardTitle className='text-2xl  tabular-nums @[250px]/card:text-xl font-light font-mono'>
-							{formatCurrencyBRL(saudeFinanceira.lucroLiquidoReal)}
+							{saudeFinanceira.lucroLiquidoReal != null
+								? formatCurrencyBRL(saudeFinanceira.lucroLiquidoReal)
+								: "—"}
 						</CardTitle>
 						<CardAction className='flex max-w-[96px] items-center justify-end overflow-hidden'></CardAction>
 					</CardHeader>
 					<CardFooter>
 						<CardDescription>
-							Lucratividade Real: {saudeFinanceira.lucratividadeReal.toFixed(2)}
-							%
+							{saudeFinanceira.lucratividadeReal != null
+								? `Lucratividade real: ${formatarPercentual(saudeFinanceira.lucratividadeReal)} · CMV ${formatCurrencyBRL(saudeFinanceira.cmv ?? 0)}`
+								: estoqueInicial == null
+									? "Sem estoque de abertura do mês"
+									: "Aguardando o estoque do dia 1 do mês seguinte"}
 						</CardDescription>
 					</CardFooter>
 				</Card>
@@ -602,7 +654,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					</CardHeader>
 					<CardFooter>
 						<CardDescription>
-							Margem por produto: {saudeFinanceira.margemContribuicaoPerc}%
+							Margem de contribuição:{" "}
+							{formatarPercentual(saudeFinanceira.margemEquilibrio)} ·{" "}
+							{saudeFinanceira.baseEquilibrio === "cmv"
+								? "base CMV"
+								: "base caixa (sem CMV no mês)"}
 						</CardDescription>
 					</CardFooter>
 				</Card>

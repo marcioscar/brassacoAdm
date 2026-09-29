@@ -50,6 +50,7 @@ model estoque {
     id    String    @id @default(auto()) @map("_id") @db.ObjectId
     valor Float?
     data  DateTime? @default(now())
+    local String?
 }
 
 type Exercicio {
