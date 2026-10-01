@@ -8,6 +8,7 @@ import {
 import {
 	getFornecedores,
 	createFornecedor,
+	validarFornecedor,
 } from "~/models/fornecedor.server";
 import { DataTable } from "~/components/desp-table";
 import { getColumns } from "~/components/columns-compra";
@@ -65,14 +66,18 @@ export async function action({ request }: Route.ActionArgs) {
 	const intent = formData.get("intent");
 
 	if (intent === "createFornecedor") {
-		const nome = String(formData.get("nome") ?? "").trim();
-		if (!nome) {
-			return Response.json(
-				{ errors: { nome: ["Nome é obrigatório"] } },
-				{ status: 400 },
-			);
+		const texto = (campo: string) => String(formData.get(campo) ?? "").trim();
+		const entrada = {
+			nome: texto("nome"),
+			cidade: texto("cidade"),
+			bairro: texto("bairro"),
+			documento: texto("documento") || undefined,
+		};
+		const errors = validarFornecedor(entrada);
+		if (errors) {
+			return Response.json({ errors }, { status: 400 });
 		}
-		await createFornecedor({ nome });
+		await createFornecedor(entrada);
 		throw redirect("/compras");
 	}
 
@@ -155,6 +160,17 @@ export default function Compras({ loaderData }: Route.ComponentProps) {
 			submittedRef.current = true;
 		}
 	}, [fetcher.state, fetcher.data?.errors]);
+
+	const fornecedorSubmittedRef = useRef(false);
+	useEffect(() => {
+		if (fornecedorFetcher.state === "idle" && fornecedorSubmittedRef.current) {
+			fornecedorSubmittedRef.current = false;
+			if (!fornecedorFetcher.data?.errors) setFornecedorDialogOpen(false);
+		}
+		if (fornecedorFetcher.state === "submitting") {
+			fornecedorSubmittedRef.current = true;
+		}
+	}, [fornecedorFetcher.state, fornecedorFetcher.data?.errors]);
 
 	return (
 		<div className='container mx-auto'>
@@ -293,21 +309,31 @@ export default function Compras({ loaderData }: Route.ComponentProps) {
 					</DialogHeader>
 					<fornecedorFetcher.Form method='post' className='flex flex-col gap-4'>
 						<input type='hidden' name='intent' value='createFornecedor' />
-						<Field>
-							<FieldLabel htmlFor='nome-fornecedor'>Nome</FieldLabel>
-							<Input
-								id='nome-fornecedor'
-								name='nome'
-								placeholder='Nome do fornecedor'
-								required
-								disabled={fornecedorFetcher.state !== "idle"}
-							/>
-							<FieldError
-								errors={fornecedorFetcher.data?.errors?.nome?.map((m) => ({
-									message: m,
-								}))}
-							/>
-						</Field>
+						{(
+							[
+								{ name: "nome", label: "Nome (razão social)", required: true },
+								{ name: "cidade", label: "Cidade", required: true },
+								{ name: "bairro", label: "Bairro", required: true },
+								{ name: "documento", label: "CNPJ/CPF (opcional)", required: false },
+							] as const
+						).map((campo) => (
+							<Field key={campo.name}>
+								<FieldLabel htmlFor={`${campo.name}-fornecedor`}>
+									{campo.label}
+								</FieldLabel>
+								<Input
+									id={`${campo.name}-fornecedor`}
+									name={campo.name}
+									required={campo.required}
+									disabled={fornecedorFetcher.state !== "idle"}
+								/>
+								<FieldError
+									errors={fornecedorFetcher.data?.errors?.[campo.name]?.map(
+										(m) => ({ message: m }),
+									)}
+								/>
+							</Field>
+						))}
 						<DialogFooter>
 							<Button
 								type='button'

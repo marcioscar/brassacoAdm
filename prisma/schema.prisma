@@ -24,9 +24,23 @@ model despesas {
 }
 
 // Coleção compartilhada com o ERP: o nome do fornecedor mora em `razaoSocial`.
+/// Coleção do ERP (projeto `pdv`, model `Fornecedor`) — o formato é dele.
+/// Lá `codigo` é único e obrigatório, assim como cidade, bairro, ativo e as
+/// datas: um documento sem eles quebra a leitura no ERP e, sem `codigo`, ocupa
+/// o único "null" do índice único. Ficam opcionais aqui só para ler cadastros
+/// antigos; quem grava é `createFornecedor`, que preenche todos.
 model fornecedores {
-    id   String  @id @default(auto()) @map("_id") @db.ObjectId
-    nome String? @map("razaoSocial")
+    id           String    @id @default(auto()) @map("_id") @db.ObjectId
+    codigo       String?   @unique
+    nome         String?   @map("razaoSocial")
+    nomeFantasia String?
+    cidade       String?
+    bairro       String?
+    documento    String?
+    tipoPessoa   String?
+    ativo        Boolean?
+    criadoEm     DateTime?
+    atualizadoEm DateTime?
 }
 
 model receitas {

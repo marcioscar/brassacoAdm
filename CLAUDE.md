@@ -41,7 +41,7 @@ The root layout (`app/routes/_layout.tsx`) wraps every page in `<MesAnoProvider>
 | `receitas` | Revenues |
 | `compras` | Purchases (NF/invoices): `nf` is a JSON blob |
 | `estoque` | Monthly stock snapshots (used for CMV) |
-| `fornecedores` | Supplier names — shared with the ERP, so `nome` is `@map("razaoSocial")` |
+| `fornecedores` | Suppliers — owned by the ERP, so `nome` is `@map("razaoSocial")`. The ERP requires a unique `codigo` plus `cidade`, `bairro`, `ativo`, `criadoEm`, `atualizadoEm`: always create through `createFornecedor`, which fills them (next code = max + 1, 6 digits). Never delete — the ERP deactivates (`ativo: false`). |
 | `produtos_preco` | Product price catalogue — fed by the ERP: `codigo` is an `Int` and `unidade` is `@map("unid")` |
 
 The database now lives on the self-hosted instance (`easypanel.quattoracademia.com`), shared with the Quattor ERP, which owns `fornecedores` and `produtos_preco` and writes them in its own shape — hence the `@map`s above. The ERP also owns ~25 other collections in the same database (`vendas`, `notas_fiscais_*`, `produtos`, `ncms`, …) that this app must not touch.
