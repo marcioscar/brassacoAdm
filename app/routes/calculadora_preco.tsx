@@ -619,8 +619,7 @@ export default function CalculadoraPreco() {
 								<DataTable
 									columns={columnsCalculadoraPreco}
 									data={analiseProdutos.linhas}
-									enableGlobalFilter
-									globalFilterPlaceholder='Buscar por código, produto, status...'
+									searchPlaceholder='Buscar por código, produto, status...'
 								/>
 							</CardContent>
 						</Card>

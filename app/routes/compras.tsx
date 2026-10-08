@@ -364,8 +364,6 @@ export default function Compras({ loaderData }: Route.ComponentProps) {
 						fornecedores={fornecedores}
 					/>
 				)}
-				filterColumn='fornecedor'
-				filterPlaceholder='Filtrar por fornecedor...'
 			/>
 		</div>
 	);

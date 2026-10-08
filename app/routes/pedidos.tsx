@@ -194,7 +194,7 @@ export default function Pedidos({ loaderData }: Route.ComponentProps) {
 						onClearSelection={clearSelection}
 					/>
 				)}
-				filterColumn=''
+				enableSearch={false}
 			/>
 		</div>
 	);

@@ -281,8 +281,6 @@ export default function Receitas({ loaderData }: Route.ComponentProps) {
 						onClearSelection={clearSelection}
 					/>
 				)}
-				filterColumn='descricao'
-				filterPlaceholder='Filtrar por descrição...'
 			/>
 		</div>
 	);

@@ -6,7 +6,6 @@ import {
 	useReactTable,
 	type SortingState,
 	getSortedRowModel,
-	type ColumnFiltersState,
 	getFilteredRowModel,
 	type RowSelectionState,
 } from "@tanstack/react-table";
@@ -23,6 +22,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { useCallback, useState } from "react";
 import { Input } from "~/components/ui/input";
+import { filtrarPorQualquerCampo } from "~/lib/busca-tabela";
 
 export type SelectionTableUtils = { clearSelection: () => void };
 
@@ -37,12 +37,10 @@ interface DataTableProps<TData, TValue> {
 	) => React.ReactNode;
 	/** toolbar: barra sempre que houver seleção; toolbar-multi-only: barra só com 2+ linhas (1 linha: ações fora da barra, ex.: diálogo) */
 	selectionPlacement?: "toolbar" | "toolbar-multi-only";
-	filterColumn?: string;
-	filterPlaceholder?: string;
 	filterExtra?: React.ReactNode;
-	/** Busca global em todas as colunas. Quando ativa, substitui o filtro de coluna única. */
-	enableGlobalFilter?: boolean;
-	globalFilterPlaceholder?: string;
+	/** Busca em todas as colunas (ver `filtrarPorQualquerCampo`). Desligue quando a tela já tem busca própria. */
+	enableSearch?: boolean;
+	searchPlaceholder?: string;
 }
 
 export function DataTable<TData extends { id?: string }, TValue>({
@@ -52,14 +50,11 @@ export function DataTable<TData extends { id?: string }, TValue>({
 	getRowId = (row) => (row as { id: string }).id,
 	selectionActions,
 	selectionPlacement = "toolbar",
-	filterColumn = "fornecedor",
-	filterPlaceholder = "Filtrar por fornecedor...",
 	filterExtra,
-	enableGlobalFilter = false,
-	globalFilterPlaceholder = "Buscar...",
+	enableSearch = true,
+	searchPlaceholder = "Buscar em qualquer campo...",
 }: DataTableProps<TData, TValue>) {
 	const [sorting, setSorting] = useState<SortingState>([]);
-	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 	const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 	const [globalFilter, setGlobalFilter] = useState("");
 
@@ -74,15 +69,15 @@ export function DataTable<TData extends { id?: string }, TValue>({
 		getPaginationRowModel: getPaginationRowModel(),
 		onSortingChange: setSorting,
 		getSortedRowModel: getSortedRowModel(),
-		onColumnFiltersChange: setColumnFilters,
 		getFilteredRowModel: getFilteredRowModel(),
 		onGlobalFilterChange: setGlobalFilter,
-		globalFilterFn: "includesString",
+		globalFilterFn: filtrarPorQualquerCampo,
+		// O padrão só deixa filtrar colunas de texto/número; a busca é da linha toda.
+		getColumnCanGlobalFilter: () => true,
 		onRowSelectionChange: setRowSelection,
 		enableRowSelection,
 		state: {
 			sorting,
-			columnFilters,
 			rowSelection,
 			globalFilter,
 		},
@@ -117,33 +112,23 @@ export function DataTable<TData extends { id?: string }, TValue>({
 				</div>
 			)}
 			{showFloatingSelection && toolbarContent}
-			{enableGlobalFilter ? (
+			{enableSearch || filterExtra ? (
 				<div className="flex flex-wrap items-center gap-2 py-4">
-					<Input
-						placeholder={globalFilterPlaceholder}
-						value={globalFilter}
-						onChange={(event) => setGlobalFilter(event.target.value)}
-						className="max-w-sm"
-					/>
-					{filterExtra}
-				</div>
-			) : (
-				filterColumn && (
-					<div className="flex flex-wrap items-center gap-2 py-4">
+					{enableSearch ? (
 						<Input
-							placeholder={filterPlaceholder}
-							value={
-								(table.getColumn(filterColumn)?.getFilterValue() as string) ?? ""
-							}
-							onChange={(event) =>
-								table.getColumn(filterColumn)?.setFilterValue(event.target.value)
-							}
+							type="search"
+							placeholder={searchPlaceholder}
+							value={globalFilter}
+							onChange={(event) => {
+								setGlobalFilter(event.target.value);
+								table.setPageIndex(0);
+							}}
 							className="max-w-sm"
 						/>
-						{filterExtra}
-					</div>
-				)
-			)}
+					) : null}
+					{filterExtra}
+				</div>
+			) : null}
 			<div className="overflow-x-auto rounded-md border">
 				<Table>
 					<TableHeader>
