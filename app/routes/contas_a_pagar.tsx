@@ -110,19 +110,29 @@ export async function action({ request }: Route.ActionArgs) {
 		const data = dataStr ? parseLocalDate(String(dataStr)) : undefined;
 		const pago = formData.get("pago") === "true";
 
+		const dataPrefix = dataStr
+			? String(dataStr).slice(0, 10)
+			: new Date().toISOString().slice(0, 10);
+		/** Envia o arquivo do campo, se veio um; nomes no mesmo padrão do cadastro. */
+		async function enviarArquivo(campo: "comprovante" | "boleto") {
+			const file = formData.get(campo);
+			if (!(file instanceof File) || file.size === 0) return undefined;
+			const buffer = Buffer.from(await file.arrayBuffer());
+			const prefixo = campo === "boleto" ? "boleto-" : "";
+			return uploadReciboAndGetUrl(buffer, `${prefixo}${dataPrefix}-${file.name}`);
+		}
+
 		let comprovanteUrl: string | undefined;
-		const comprovanteFile = formData.get("comprovante");
-		if (comprovanteFile instanceof File && comprovanteFile.size > 0) {
-			try {
-				const buffer = Buffer.from(await comprovanteFile.arrayBuffer());
-				const dataPrefix = dataStr
-					? String(dataStr).slice(0, 10)
-					: new Date().toISOString().slice(0, 10);
-				const nomeComData = `${dataPrefix}-${comprovanteFile.name}`;
-				comprovanteUrl = await uploadReciboAndGetUrl(buffer, nomeComData);
-			} catch (error) {
-				return jsonFieldUploadError("comprovante", error);
-			}
+		let boletoUrl: string | undefined;
+		try {
+			boletoUrl = await enviarArquivo("boleto");
+		} catch (error) {
+			return jsonFieldUploadError("boleto", error);
+		}
+		try {
+			comprovanteUrl = await enviarArquivo("comprovante");
+		} catch (error) {
+			return jsonFieldUploadError("comprovante", error);
 		}
 
 		await updateDespesaPartial(id, {
@@ -135,6 +145,7 @@ export async function action({ request }: Route.ActionArgs) {
 			pago,
 			...(data && { data }),
 			...(comprovanteUrl && { comprovante: comprovanteUrl }),
+			...(boletoUrl && { boleto: boletoUrl }),
 		});
 		throw redirect(voltarParaLista);
 	}

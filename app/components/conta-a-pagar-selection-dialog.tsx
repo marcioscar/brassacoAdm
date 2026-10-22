@@ -57,19 +57,20 @@ function formatDateForInput(d: Date | null): string {
 	return `${y}-${m}-${day}`;
 }
 
-function hrefComprovanteDespesa(
-	comprovante: string | null | undefined,
+/** Link para abrir o arquivo anexado (comprovante ou boleto) da despesa. */
+function hrefArquivoDespesa(
+	arquivo: string | null | undefined,
 	despesaId: string,
+	tipo: "comprovante" | "boleto",
 ): string | null {
-	if (comprovante == null || comprovante === "" || !despesaId) return null;
-	const isInvalidUrl =
-		comprovante.includes("/session") || comprovante.endsWith("/session");
-	const isLegacyCloudreve = comprovante.startsWith("cloudreve://");
-	if (isInvalidUrl || isLegacyCloudreve) return `/despesas/comprovante/${despesaId}`;
-	if (comprovante.startsWith("http://") || comprovante.startsWith("https://")) {
-		return comprovante;
+	if (arquivo == null || arquivo === "" || !despesaId) return null;
+	const isInvalidUrl = arquivo.includes("/session") || arquivo.endsWith("/session");
+	const isLegacyCloudreve = arquivo.startsWith("cloudreve://");
+	if (isInvalidUrl || isLegacyCloudreve) return `/despesas/${tipo}/${despesaId}`;
+	if (arquivo.startsWith("http://") || arquivo.startsWith("https://")) {
+		return arquivo;
 	}
-	return `/despesas/comprovante/${despesaId}`;
+	return `/despesas/${tipo}/${despesaId}`;
 }
 
 type SelectionUtils = { clearSelection: () => void };
@@ -129,7 +130,12 @@ export function ContaAPagarSelectionDialog({
 
 	if (!despesa) return null;
 
-	const comprovanteHref = hrefComprovanteDespesa(despesa.comprovante, despesa.id);
+	const comprovanteHref = hrefArquivoDespesa(
+		despesa.comprovante,
+		despesa.id,
+		"comprovante",
+	);
+	const boletoHref = hrefArquivoDespesa(despesa.boleto, despesa.id, "boleto");
 
 	return (
 		<Dialog open={open} onOpenChange={handleDialogOpenChange}>
@@ -259,6 +265,39 @@ export function ContaAPagarSelectionDialog({
 								</SelectContent>
 							</Select>
 							<input type='hidden' name='loja' value={loja} />
+						</Field>
+						<Field className='col-span-2'>
+							<FieldLabel htmlFor='conta-apagar-boleto'>
+								Boleto (opcional)
+							</FieldLabel>
+							{boletoHref ? (
+								<p className='text-muted-foreground mb-2 text-xs'>
+									<a
+										href={boletoHref}
+										target='_blank'
+										rel='noopener noreferrer'
+										className='text-primary underline'>
+										Ver boleto atual
+									</a>
+								</p>
+							) : null}
+							<Input
+								id='conta-apagar-boleto'
+								name='boleto'
+								type='file'
+								accept='.pdf,.jpg,.jpeg,.png,.webp'
+								disabled={busy}
+								className='cursor-pointer'
+							/>
+							<p className='text-muted-foreground mt-1 text-xs'>
+								Selecione um arquivo e clique em Salvar para substituir ou
+								anexar.
+							</p>
+							<FieldError
+								errors={fetcher.data?.errors?.boleto?.map((m) => ({
+									message: m,
+								}))}
+							/>
 						</Field>
 						<Field className='col-span-2'>
 							<FieldLabel htmlFor='conta-apagar-comprovante'>
