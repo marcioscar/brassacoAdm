@@ -101,17 +101,6 @@ export async function action({ request }: Route.ActionArgs) {
 		throw redirect(voltarParaLista);
 	}
 
-	if (intent === "conferir") {
-		const id = formData.get("id");
-		if (typeof id !== "string") {
-			return Response.json({ error: "ID inválido" }, { status: 400 });
-		}
-		await updateDespesaPartial(id, {
-			conferido: formData.get("conferido") === "true",
-		});
-		return Response.json({ ok: true });
-	}
-
 	if (intent === "edit") {
 		const id = formData.get("id");
 		if (typeof id !== "string") {
@@ -252,6 +241,17 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 	const [fornecedor, setFornecedor] = useState("");
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const submittedRef = useRef(false);
+	// Conferência só na tela: não grava no banco e zera ao recarregar
+	const [conferidos, setConferidos] = useState<Set<string>>(new Set());
+
+	function atualizarIntervalo(nome: "de" | "ate", valor: string) {
+		const params = new URLSearchParams(searchParams);
+		if (valor) params.set(nome, valor);
+		else params.delete(nome);
+		// Um intervalo de datas substitui o "Vence hoje"
+		params.delete("filtro");
+		setSearchParams(params);
+	}
 
 	function atualizarParametro(nome: string, valor: string, padrao: string) {
 		const params = new URLSearchParams(searchParams);
@@ -294,7 +294,14 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 					</Select>
 					<Select
 						value={filtro}
-						onValueChange={(v) => atualizarParametro("filtro", v, "todas")}>
+						onValueChange={(v) => {
+							const params = new URLSearchParams(searchParams);
+							params.delete("de");
+							params.delete("ate");
+							if (v === "todas") params.delete("filtro");
+							else params.set("filtro", v);
+							setSearchParams(params);
+						}}>
 						<SelectTrigger className='w-[140px]'>
 							<SelectValue />
 						</SelectTrigger>
@@ -303,6 +310,36 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 							<SelectItem value='todas'>Todas as datas</SelectItem>
 						</SelectContent>
 					</Select>
+					<div className='flex items-center gap-2 text-sm'>
+						<Input
+							type='date'
+							aria-label='Vencimento de'
+							value={de}
+							onChange={(e) => atualizarIntervalo("de", e.target.value)}
+							className='w-[150px]'
+						/>
+						<span className='text-muted-foreground'>até</span>
+						<Input
+							type='date'
+							aria-label='Vencimento até'
+							value={ate}
+							onChange={(e) => atualizarIntervalo("ate", e.target.value)}
+							className='w-[150px]'
+						/>
+						{de || ate ? (
+							<Button
+								variant='ghost'
+								size='sm'
+								onClick={() => {
+									const params = new URLSearchParams(searchParams);
+									params.delete("de");
+									params.delete("ate");
+									setSearchParams(params);
+								}}>
+								Limpar
+							</Button>
+						) : null}
+					</div>
 					<span className='text-sm text-muted-foreground tabular-nums'>
 						{contasAPagar.length} {contasAPagar.length === 1 ? "boleto" : "boletos"} ·{" "}
 						{formatCurrencyBRL(total)}
@@ -524,7 +561,18 @@ export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
 				</Dialog>
 			</div>
 			<DataTable
-				columns={getColumns({ variant: "contas_a_pagar", enableSelection: true })}
+				columns={getColumns({
+						variant: "contas_a_pagar",
+						enableSelection: true,
+						conferidos,
+						onToggleConferido: (id, marcado) =>
+							setConferidos((atual) => {
+								const novo = new Set(atual);
+								if (marcado) novo.add(id);
+								else novo.delete(id);
+								return novo;
+							}),
+					})}
 				data={contasAPagar}
 				enableRowSelection
 				selectionPlacement='toolbar-multi-only'

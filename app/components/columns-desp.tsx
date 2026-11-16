@@ -4,7 +4,6 @@ import { ArrowUpDown, Save, ReceiptText, Barcode } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
-import { useFetcher } from "react-router";
 
 export type Despesa = {
 	id: string;
@@ -18,33 +17,15 @@ export type Despesa = {
 	boleto: string | null;
 	pago: boolean | null;
 	loja: string | null;
-	conferido?: boolean | null;
 };
 
 export type DespesaTableOptions = {
 	variant: "despesas" | "contas_a_pagar";
 	enableSelection?: boolean;
+	/** Só na tela (não grava): ids que o usuário já conferiu. */
+	conferidos?: Set<string>;
+	onToggleConferido?: (id: string, marcado: boolean) => void;
 };
-
-function ConferidoCheckbox({ id, conferido }: { id: string; conferido: boolean }) {
-	const fetcher = useFetcher();
-	// Otimista: mostra o valor enviado enquanto o servidor grava
-	const marcado = fetcher.formData
-		? fetcher.formData.get("conferido") === "true"
-		: conferido;
-	return (
-		<Checkbox
-			checked={marcado}
-			aria-label="Conferido"
-			onCheckedChange={(value) =>
-				fetcher.submit(
-					{ intent: "conferir", id, conferido: String(!!value) },
-					{ method: "post" },
-				)
-			}
-		/>
-	);
-}
 
 export function getColumns(options?: DespesaTableOptions): ColumnDef<Despesa>[] {
 	const columns: ColumnDef<Despesa>[] = [];
@@ -79,9 +60,12 @@ export function getColumns(options?: DespesaTableOptions): ColumnDef<Despesa>[] 
 			id: "conferido",
 			header: "Conferido",
 			cell: ({ row }) => (
-				<ConferidoCheckbox
-					id={row.original.id}
-					conferido={!!row.original.conferido}
+				<Checkbox
+					checked={options.conferidos?.has(row.original.id) ?? false}
+					onCheckedChange={(value) =>
+						options.onToggleConferido?.(row.original.id, !!value)
+					}
+					aria-label="Conferido"
 				/>
 			),
 			enableSorting: false,

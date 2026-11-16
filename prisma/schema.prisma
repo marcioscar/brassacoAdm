@@ -21,8 +21,6 @@ model despesas {
     boleto        String?
     pago          Boolean?  @default(false)
     loja          String?
-    /// Marcação manual de "já conferi" na tela de contas a pagar
-    conferido     Boolean?  @default(false)
 }
 
 // Coleção compartilhada com o ERP: o nome do fornecedor mora em `razaoSocial`.

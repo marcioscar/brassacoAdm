@@ -133,7 +133,6 @@ export async function updateDespesaPartial(
 		tipo: string;
 		data: Date;
 		loja: string;
-		conferido: boolean;
 	}>,
 ) {
 	return db.despesas.update({ where: { id }, data });
