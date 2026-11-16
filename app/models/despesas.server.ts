@@ -43,9 +43,18 @@ export type StatusContasAPagar = "abertos" | "pagos";
  * viraria a de todas as despesas pagas, que já é a página Despesas.
  * O filtro `hoje` olha a data de vencimento (`data`).
  */
+function parseDataCivil(valor?: string) {
+	if (!valor || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) return null;
+	const d = new Date(`${valor}T00:00:00.000Z`);
+	return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export async function getContasAPagar(options?: {
 	filtro?: FiltroContasAPagar;
 	status?: StatusContasAPagar;
+	/** Intervalo de vencimento (data civil `YYYY-MM-DD`, inclusivo); vale quando o filtro não é `hoje`. */
+	de?: string;
+	ate?: string;
 }) {
 	const filtro = options?.filtro ?? "todas";
 	const status = options?.status ?? "abertos";
@@ -56,6 +65,15 @@ export async function getContasAPagar(options?: {
 		const amanha = new Date(hoje);
 		amanha.setUTCDate(amanha.getUTCDate() + 1);
 		data = { gte: hoje, lt: amanha };
+	} else {
+		const de = parseDataCivil(options?.de);
+		const ate = parseDataCivil(options?.ate);
+		if (de && de > data.gte) data = { ...data, gte: de };
+		if (ate) {
+			const fim = new Date(ate);
+			fim.setUTCDate(fim.getUTCDate() + 1);
+			data = { ...data, lt: fim };
+		}
 	}
 
 	return db.despesas.findMany({
@@ -115,6 +133,7 @@ export async function updateDespesaPartial(
 		tipo: string;
 		data: Date;
 		loja: string;
+		conferido: boolean;
 	}>,
 ) {
 	return db.despesas.update({ where: { id }, data });

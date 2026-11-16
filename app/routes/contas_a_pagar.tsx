@@ -101,6 +101,17 @@ export async function action({ request }: Route.ActionArgs) {
 		throw redirect(voltarParaLista);
 	}
 
+	if (intent === "conferir") {
+		const id = formData.get("id");
+		if (typeof id !== "string") {
+			return Response.json({ error: "ID inválido" }, { status: 400 });
+		}
+		await updateDespesaPartial(id, {
+			conferido: formData.get("conferido") === "true",
+		});
+		return Response.json({ ok: true });
+	}
+
 	if (intent === "edit") {
 		const id = formData.get("id");
 		if (typeof id !== "string") {
@@ -206,7 +217,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 		url.searchParams.get("filtro") === "hoje" ? "hoje" : "todas";
 	const status: StatusContasAPagar =
 		url.searchParams.get("status") === "pagos" ? "pagos" : "abertos";
-	const contasAPagar = await getContasAPagar({ filtro, status });
+	const de = url.searchParams.get("de") ?? "";
+	const ate = url.searchParams.get("ate") ?? "";
+	const contasAPagar = await getContasAPagar({ filtro, status, de, ate });
 	const getTimestampOrdenacao = (data: Date | null) =>
 		data ? new Date(data).getTime() : Number.POSITIVE_INFINITY;
 	// Abertos: o próximo vencimento primeiro. Pagos: o mais recente primeiro.
@@ -222,11 +235,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 		fornecedores,
 		filtro,
 		status,
+		de,
+		ate,
 		total,
 	};
 }
 export default function ContasAPagar({ loaderData }: Route.ComponentProps) {
-	const { contasAPagar, fornecedores, filtro, status, total } = loaderData;
+	const { contasAPagar, fornecedores, filtro, status, de, ate, total } =
+		loaderData;
 	const [searchParams, setSearchParams] = useSearchParams();
 	const fetcher = useFetcher<{ errors?: Record<string, string[]> }>();
 	const busy = fetcher.state !== "idle";
