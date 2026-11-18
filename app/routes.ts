@@ -8,6 +8,7 @@ export default [
    route("despesas/boleto/:id", "routes/despesas.boleto.$id.tsx"),
    route("contas_a_pagar", "routes/contas_a_pagar.tsx"),
    route("compras", "routes/compras.tsx"),
+   route("folha", "routes/folha.tsx"),
    route("receitas", "routes/receitas.tsx"),
    route("pedidos", "routes/pedidos.tsx"),
    route("calculadora-preco", "routes/calculadora_preco.tsx"),

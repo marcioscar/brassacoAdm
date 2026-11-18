@@ -21,6 +21,29 @@ model despesas {
     boleto        String?
     pago          Boolean?  @default(false)
     loja          String?
+    /// Mês da folha que originou esta despesa: "YYYY-MM" para salários e
+    /// "13-YYYY-MM" para o 13º. Marca o lançamento mantido em sincronia com o
+    /// total pago na folha — ver `app/models/folha.server.ts`. Ausente nas manuais.
+    origem_folha_mes String?
+}
+
+type FolhaSalarios {
+    sal_id String
+    /// "salario", "decimo_1" ou "decimo_2" — ver `app/lib/folha.ts`.
+    tipo   String
+    valor  Float
+    data   DateTime @db.Date
+    pago   Boolean
+}
+
+/// Funcionários da folha (coleção própria do Brassaço, não é do ERP).
+model folha {
+    id       String          @id @default(auto()) @map("_id") @db.ObjectId
+    nome     String
+    conta    String
+    salarios FolhaSalarios[]
+
+    @@map("folha_brassaco")
 }
 
 // Coleção compartilhada com o ERP: o nome do fornecedor mora em `razaoSocial`.
