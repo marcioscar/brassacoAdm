@@ -37,9 +37,9 @@ export async function salvarLancamentos(
 	periodo: MesFechamento,
 	data: Date,
 	pago: boolean,
-	itens: { folhaId: string; valor: number }[],
+	itens: { folhaId: string; valor: number; comprovante?: string }[],
 ) {
-	for (const { folhaId, valor } of itens) {
+	for (const { folhaId, valor, comprovante } of itens) {
 		const f = await db.folha.findUniqueOrThrow({ where: { id: folhaId } });
 		const salarios = [...(f.salarios ?? [])];
 		const indices = salarios
@@ -53,10 +53,19 @@ export async function salvarLancamentos(
 				valor,
 				data,
 				pago,
+				comprovante: comprovante ?? null,
 			});
 		} else {
 			const [primeiro, ...duplicados] = indices;
-			salarios[primeiro] = { ...salarios[primeiro], tipo, valor, data, pago };
+			salarios[primeiro] = {
+				...salarios[primeiro],
+				tipo,
+				valor,
+				data,
+				pago,
+				// Sem arquivo novo, mantém o comprovante que já estava anexado.
+				...(comprovante && { comprovante }),
+			};
 			for (const i of duplicados.reverse()) salarios.splice(i, 1);
 		}
 		await db.folha.update({
@@ -65,6 +74,23 @@ export async function salvarLancamentos(
 		});
 	}
 	return itens.length;
+}
+
+/** Anexa (ou troca) o comprovante do lançamento do período. */
+export async function anexarComprovante(
+	folhaId: string,
+	tipo: TipoLancamento,
+	periodo: MesFechamento,
+	comprovante: string,
+) {
+	const f = await db.folha.findUniqueOrThrow({ where: { id: folhaId } });
+	const salarios = (f.salarios ?? []).map((s) =>
+		lancamentoNoPeriodo(s, tipo, periodo) ? { ...s, comprovante } : s,
+	);
+	await db.folha.update({
+		where: { id: folhaId },
+		data: { salarios: { set: salarios } },
+	});
 }
 
 /** Remove o lançamento do período, desde que ainda não tenha sido pago. */

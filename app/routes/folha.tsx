@@ -1,5 +1,7 @@
 import type { Route } from "./+types/folha";
 import { FechamentoFolha } from "~/components/folha/fechamento-folha";
+import { uploadReciboAndGetUrl } from "~/models/pocketbase.server";
+import { formatUploadError } from "~/lib/upload-errors";
 import {
 	hojeFechamento,
 	limitesDoPeriodo,
@@ -9,6 +11,7 @@ import {
 	parseTipoLancamento,
 } from "~/lib/folha";
 import {
+	anexarComprovante,
 	atualizarFuncionario,
 	criarFuncionario,
 	excluirFuncionario,
@@ -40,6 +43,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 function texto(formData: FormData, campo: string): string {
 	const v = formData.get(campo);
 	return typeof v === "string" ? v.trim() : "";
+}
+
+/** Envia o comprovante ao PocketBase, com o mesmo prefixo de data das despesas. */
+async function enviarComprovante(arquivo: File, dataStr: string) {
+	const buffer = Buffer.from(await arquivo.arrayBuffer());
+	return uploadReciboAndGetUrl(buffer, `folha-${dataStr}-${arquivo.name}`);
 }
 
 function lerPeriodoETipo(formData: FormData) {
@@ -101,17 +110,49 @@ export async function action({ request }: Route.ActionArgs) {
 		}
 		if (itens.length === 0) return { error: "Selecione ao menos uma pessoa" };
 
+		// Comprovantes anexados na hora de pagar: campo `comprovante_<folhaId>`.
+		const itensComArquivo: { folhaId: string; valor: number; comprovante?: string }[] = [];
+		for (const item of itens) {
+			const arquivo = formData.get(`comprovante_${item.folhaId}`);
+			if (arquivo instanceof File && arquivo.size > 0) {
+				try {
+					const url = await enviarComprovante(arquivo, dataStr);
+					itensComArquivo.push({ ...item, comprovante: url });
+					continue;
+				} catch (error) {
+					return { error: `Comprovante: ${formatUploadError(error)}` };
+				}
+			}
+			itensComArquivo.push(item);
+		}
+
 		try {
 			await salvarLancamentos(
 				alvo.tipo,
 				alvo.periodo,
 				new Date(`${dataStr}T00:00:00.000Z`),
 				formData.get("pago") === "1",
-				itens,
+				itensComArquivo,
 			);
 			return { success: true };
 		} catch {
 			return { error: "Erro ao salvar os lançamentos" };
+		}
+	}
+
+	if (intent === "anexarComprovante") {
+		const alvo = lerPeriodoETipo(formData);
+		const folhaId = texto(formData, "folhaId");
+		const arquivo = formData.get("comprovante");
+		if (!alvo || !folhaId || !(arquivo instanceof File) || arquivo.size === 0) {
+			return { error: "Escolha o arquivo do comprovante" };
+		}
+		try {
+			const url = await enviarComprovante(arquivo, new Date().toISOString().slice(0, 10));
+			await anexarComprovante(folhaId, alvo.tipo, alvo.periodo, url);
+			return { success: true };
+		} catch (error) {
+			return { error: `Comprovante: ${formatUploadError(error)}` };
 		}
 	}
 

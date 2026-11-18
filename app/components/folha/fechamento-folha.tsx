@@ -2,6 +2,7 @@ import {
 	Check,
 	ChevronLeft,
 	Copy,
+	Paperclip,
 	ChevronRight,
 	ClipboardCheck,
 	Search,
@@ -122,6 +123,8 @@ export function FechamentoFolha({ fechamento, mesAtual, hoje }: Props) {
 	const salvandoIds = useRef<string[]>([]);
 
 	const [edicoes, setEdicoes] = useState<Record<string, string>>({});
+	// Comprovantes escolhidos para quem ainda não foi salvo; vão junto com o pagamento.
+	const [arquivos, setArquivos] = useState<Record<string, File>>({});
 	const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
 	const [filtro, setFiltro] = useState<Filtro>("todos");
 	const [busca, setBusca] = useState("");
@@ -137,6 +140,11 @@ export function FechamentoFolha({ fechamento, mesAtual, hoje }: Props) {
 		salvandoIds.current = [];
 		setSelecionados(new Set());
 		setEdicoes((atual) => {
+			const proximo = { ...atual };
+			for (const id of salvos) delete proximo[id];
+			return proximo;
+		});
+		setArquivos((atual) => {
 			const proximo = { ...atual };
 			for (const id of salvos) delete proximo[id];
 			return proximo;
@@ -198,19 +206,35 @@ export function FechamentoFolha({ fechamento, mesAtual, hoje }: Props) {
 	function salvar(pago: boolean) {
 		if (itensSelecionados.length === 0 || invalidos.length > 0) return;
 		salvandoIds.current = itensSelecionados.map((i) => i.folhaId);
-		fetcher.submit(
-			{
-				intent: "salvarLancamentos",
-				tipo,
-				mes: formatarMesFechamento(periodo),
-				data: dataPagamento,
-				pago: pago ? "1" : "0",
-				itens: JSON.stringify(
-					itensSelecionados.map(({ folhaId, valor }) => ({ folhaId, valor })),
-				),
-			},
-			{ method: "post" },
+		const form = new FormData();
+		form.set("intent", "salvarLancamentos");
+		form.set("tipo", tipo);
+		form.set("mes", formatarMesFechamento(periodo));
+		form.set("data", dataPagamento);
+		form.set("pago", pago ? "1" : "0");
+		form.set(
+			"itens",
+			JSON.stringify(
+				itensSelecionados.map(({ folhaId, valor }) => ({ folhaId, valor })),
+			),
 		);
+		for (const { folhaId } of itensSelecionados) {
+			const arquivo = arquivos[folhaId];
+			if (arquivo) form.set(`comprovante_${folhaId}`, arquivo);
+		}
+		fetcher.submit(form, { method: "post", encType: "multipart/form-data" });
+	}
+
+	/** Linha já lançada: o comprovante vai direto, sem precisar salvar de novo. */
+	function anexarAgora(folhaId: string, arquivo: File) {
+		salvandoIds.current = [];
+		const form = new FormData();
+		form.set("intent", "anexarComprovante");
+		form.set("tipo", tipo);
+		form.set("mes", formatarMesFechamento(periodo));
+		form.set("folhaId", folhaId);
+		form.set("comprovante", arquivo);
+		fetcher.submit(form, { method: "post", encType: "multipart/form-data" });
 	}
 
 	function remover(folhaId: string) {
@@ -361,6 +385,7 @@ export function FechamentoFolha({ fechamento, mesAtual, hoje }: Props) {
 							</TableHead>
 							<TableHead className='w-40'>Valor</TableHead>
 							<TableHead>Situação</TableHead>
+							<TableHead>Comprovante</TableHead>
 							<TableHead className='w-8' />
 						</TableRow>
 					</TableHeader>
@@ -438,6 +463,25 @@ export function FechamentoFolha({ fechamento, mesAtual, hoje }: Props) {
 										<Situacao linha={linha} />
 									</TableCell>
 									<TableCell>
+										<Comprovante
+											nome={linha.nome}
+											url={linha.lancamento?.comprovante ?? null}
+											escolhido={arquivos[linha.folhaId]?.name ?? null}
+											desabilitado={ocupado}
+											onEscolher={(arquivo) => {
+												if (linha.lancamento) {
+													anexarAgora(linha.folhaId, arquivo);
+													return;
+												}
+												setArquivos((atual) => ({
+													...atual,
+													[linha.folhaId]: arquivo,
+												}));
+												if (!marcado) alternar(linha.folhaId, true);
+											}}
+										/>
+									</TableCell>
+									<TableCell>
 										{linha.lancamento && !linha.lancamento.pago && (
 											<Button
 												type='button'
@@ -457,7 +501,7 @@ export function FechamentoFolha({ fechamento, mesAtual, hoje }: Props) {
 						{visiveis.length === 0 && (
 							<TableRow>
 								<TableCell
-									colSpan={7}
+									colSpan={8}
 									className='py-8 text-center text-muted-foreground'>
 									Ninguém nesta lista.
 								</TableCell>
@@ -600,5 +644,56 @@ function Situacao({ linha }: { linha: LinhaFechamento }) {
 		<span className='rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700'>
 			A pagar {dataCurta(lancamento.data)} · {moeda(lancamento.valor)}
 		</span>
+	);
+}
+
+function Comprovante({
+	nome,
+	url,
+	escolhido,
+	desabilitado,
+	onEscolher,
+}: {
+	nome: string;
+	url: string | null;
+	escolhido: string | null;
+	desabilitado: boolean;
+	onEscolher: (arquivo: File) => void;
+}) {
+	return (
+		<div className='flex max-w-44 items-center gap-1'>
+			<label
+				className={cn(
+					"inline-flex size-6 cursor-pointer items-center justify-center rounded-md hover:bg-accent",
+					desabilitado && "pointer-events-none opacity-50",
+				)}
+				title={url || escolhido ? "Trocar comprovante" : "Anexar comprovante"}>
+				<Paperclip className='size-3.5' />
+				<input
+					type='file'
+					accept='.pdf,.jpg,.jpeg,.png,.webp'
+					className='sr-only'
+					aria-label={`Comprovante de ${nome}`}
+					onChange={(e) => {
+						const arquivo = e.target.files?.[0];
+						if (arquivo) onEscolher(arquivo);
+						e.target.value = "";
+					}}
+				/>
+			</label>
+			{escolhido ? (
+				<span className='truncate text-xs text-muted-foreground' title={escolhido}>
+					{escolhido}
+				</span>
+			) : url ? (
+				<a
+					href={url}
+					target='_blank'
+					rel='noopener noreferrer'
+					className='text-xs text-primary hover:underline'>
+					Ver
+				</a>
+			) : null}
+		</div>
 	);
 }

@@ -31,6 +31,7 @@ export type Lancamento = {
 	pago?: boolean | null;
 	data?: Date | string | null;
 	tipo?: string | null;
+	comprovante?: string | null;
 };
 
 export type FuncionarioFolha = {
@@ -47,7 +48,12 @@ export type LinhaFechamento = {
 	/** Salário do mês anterior (salário) ou salário base (13º). */
 	referencia: number | null;
 	sugestao: number | null;
-	lancamento: { valor: number; data: string; pago: boolean } | null;
+	lancamento: {
+		valor: number;
+		data: string;
+		pago: boolean;
+		comprovante: string | null;
+	} | null;
 };
 
 export type Fechamento = {
@@ -174,6 +180,7 @@ function montarLinha(
 					valor: arredondar(doPeriodo.reduce((acc, l) => acc + (l.valor ?? 0), 0)),
 					data: isoData(new Date(doPeriodo[0].data!)),
 					pago: doPeriodo.every((l) => l.pago === true),
+					comprovante: doPeriodo.find((l) => l.comprovante)?.comprovante ?? null,
 				}
 			: null;
 

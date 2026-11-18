@@ -34,6 +34,8 @@ type FolhaSalarios {
     valor  Float
     data   DateTime @db.Date
     pago   Boolean
+    /// URL do comprovante de pagamento (PocketBase), como nas despesas.
+    comprovante String?
 }
 
 /// Funcionários da folha (coleção própria do Brassaço, não é do ERP).
